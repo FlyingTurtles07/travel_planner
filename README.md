@@ -1,5 +1,9 @@
 # travel_planner
 
+---
+
+## 0. API 발급 전 기본 셋팅하기 
+
 ### 1. 가상환경 만들기
 VScode에서 터미널을 열고 " python -m venv .venv " 입력 --> 프로젝트 폴더 안에 " .venv " 폴더 생김
 ### 2. 가상환경 활성화
@@ -125,6 +129,227 @@ Collecting openai
 ```
 python -m venv .venv
 ```
+#### 3. 과정을 간단하게 나타내면
+
+```
+내 컴퓨터
+│
+├─ Python
+│
+└─ 여행 API 프로젝트
+     │
+     └─ .venv  ← 이 프로젝트 전용 작업공간
+          │
+          ├─ requests
+          ├─ python-dotenv
+          └─ openai
+
+
+Python 프로그램
+      │
+      ├── requests ─────→ 관광/지도 API
+      │
+      ├── python-dotenv ─→ API 키
+      │
+      └── openai ───────→ OpenAI API
+```
+
+
+
+---
+
+
+
+## 1. 전체 구조 잡기
+
+### 날짜 → AI 지역 추천 → 추천 지역을 지도 API에 전달 → 맛집 검색 → 다시 AI에게 전달 → 여행 리포트 생성
+
+```
+사용자
+  │
+  │ -date "2026-03-15"
+  ▼
+① Python CLI
+  │
+  ▼
+② LLM API
+  │
+  │ 날짜를 전달
+  │
+  ▼
+[1차 추천 JSON]
+  ├─ recommended_city
+  ├─ weather
+  ├─ events
+  └─ reason
+       │
+       │ recommended_city 전달
+       ▼
+③ 지도/장소 API
+       │
+       ▼
+[맛집 검색 결과]
+  ├─ name
+  ├─ address
+  ├─ category
+  ├─ url
+  ├─ x
+  └─ y
+       │
+       │ 1차 추천 + 맛집
+       ▼
+④ LLM API
+       │
+       ▼
+⑤ 최종 여행 리포트
+       │
+       ├─ JSON 저장
+       └─ Markdown 저장
+```
+
+## 2. 전체 폴더 구조 및 각 파일의 역할
+
+```
+travel-planner/
+│
+├─ travel_planner.py
+├─ .env
+├─ .gitignore
+├─ README.md
+├─ requirements.txt
+│
+└─ results/
+   ├─ 2026-03-15_travel_data.json
+   └─ 2026-03-15_travel_plan.md
+```
+
+| 파일                  | 역할                          |
+| ------------------- | --------------------------- |
+| `travel_planner.py` | 메인 Python 프로그램              |
+| `.env`              | API 키 보관                    |
+| `.gitignore`        | `.env`가 GitHub에 올라가지 않도록 차단 |
+| `README.md`         | 프로그램 설명서                    |
+| `requirements.txt`  | 필요한 Python 라이브러리            |
+| `results/`          | 실행 결과 저장                    |
+| `.json`             | API 원본/구조화 데이터              |
+| `.md`               | 최종 여행 리포트                   |
+
+> 중요: .env는 GitHub에 절대 올리면 안됨
+
+
+## 3. API키 준비
+
+### 1. 프로젝트 폴더 (travel_planner)에 .env 만들고 내용 만들기
+```
+OPENAI_API_KEY=실제키
+KAKAO_REST_API_KEY=실제키
+```
+
+### 2. travel_planner에 추가
+```
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+openai_api_key = os.getenv("OPENAI_API_KEY")
+kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
+```
+
+### 3. .gitignore 만들고 내용 추가  --> .env 반드시 추가해야 함
+
+```
+.env
+.venv/
+__pycache__/
+```
+
+### 4. 시작 전에 결정할 것 (5분)
+
+LLM API: Gemini <br>
+장소 API: Kakao Local
+
+> LLM API: OpenAI vs Gemini 중 1개 선택 (계정 있는 쪽, 또는 무료 크레딧 있는 쪽)
+
+> 장소 API: Kakao Local vs Naver Local Search 중 1개 선택 (Kakao가 문서/커뮤니티 자료 많아서 초보자에게 편함)
+
+> 이 선택에 따라 필요한 API 키 발급 사이트가 다르니, 이걸 제일 먼저 정해야 다음 단계(키 발급)로 넘어갈 수 있어요.
+
+
+
+- Gemini API 키 발급 (Google AI Studio)
+https://aistudio.google.com 접속 → Google 계정으로 로그인
+화면 좌측 사이드바 하단(또는 메인 화면)에 있는 "Get API key" 버튼 클릭
+API 키 관리 페이지로 이동 → "API 키 만들기(Create API key)" 버튼 클릭
+연결할 Google Cloud 프로젝트를 선택하는 창이 뜨는데, 기존 프로젝트가 없으면 "새 프로젝트 만들기"를 눌러 하나 생성
+몇 초 뒤 AIza...로 시작하는 키가 발급됨 → 바로 복사해서 메모장에 저장
+참고로 새로 발급한 키는 자동으로 **"승인 키(Auth key)"**로 생성되므로 별도 설정 없이 그대로 쓰면 됩니다.
+무료 티어(분당/일일 요청 제한 있음)로 바로 테스트 가능 — 별도 결제 등록 없이도 시작 가능
+
+💡 Gemini는 이 미션 수준(테스트용 호출 몇 번)에서는 무료 티어만으로 충분해서, "결제 등록"이라는 진입 장벽이 없다는 게 초보자 입장에서 가장 큰 장점입니다.
+
+코드에서 라이브러리 설치:
+```
+pip install google-genai
+```
+
+
+### 5. API 키 발급 & 보안 설정 (가장 먼저 해야 할 실질적 작업)
+선택한 LLM API 키 발급 (Google AI Studio) <br>
+선택한 장소 API 키 발급 (Kakao Developers)
+
+> 선택한 LLM API 키 발급 (OpenAI platform 또는 Google AI Studio)
+
+> 선택한 장소 API 키 발급 (Kakao Developers 또는 Naver Developers)
+
+> python-dotenv 설치 후 os.getenv()로 키 불러오는 테스트 코드 작성
+
+> 이 단계에서 키가 제대로 로드되는지 print(len(key)) 정도로만 확인하고 절대 키 자체를 출력하지 않기
+
+
+- Kakao Local API 키 발급 (Kakao Developers)
+https://developers.kakao.com 접속 → 카카오 계정으로 로그인
+상단 메뉴 "내 애플리케이션" 클릭
+"애플리케이션 추가하기" 버튼 클릭
+앱 이름(예: 여행플래너), 사업자명(개인이면 본인 이름/닉네임)을 입력하고 저장
+생성된 앱 카드를 클릭해서 상세 페이지로 이동
+좌측 메뉴에서 "앱 키" 탭 클릭
+여러 키(네이티브 앱 키, REST API 키, JavaScript 키, Admin 키)가 보이는데, 우리가 쓸 건 "REST API 키" — 이걸 복사
+
+⚠️ 참고: 최근 카카오는 보안 강화를 위해 REST API 키에 "클라이언트 시크릿(client secret)" 기능이 기본 활성화되어 함께 생성됩니다. 하지만 이건 카카오 로그인(사용자 인증) 기능을 쓸 때만 필요하고, 우리가 쓸 Local(장소 검색) API는 REST API 키만 헤더에 넣으면 되고 client secret은 필요 없습니다. 그러니 지금은 무시하고 넘어가도 됩니다.
+
+왼쪽 메뉴의 "플랫폼" 설정은 웹/앱 URL을 등록하는 곳인데, 우리는 서버(터미널)에서만 직접 호출하므로 이 단계는 건너뛰어도 됩니다.
+Local API는 별도 심사나 신청 없이 REST API 키만 있으면 바로 호출 가능합니다.
+
+
+### 6. 테스트 호출 한 번 해보기
+
+키를 발급받자마자 코드를 짜기 전에, 브라우저나 터미널에서 키가 진짜 작동하는지 먼저 확인하는 습관을 들이면 나중에 디버깅 시간이 훨씬 줄어듭니다.
+
+- Kakao 키 테스트 (터미널에 바로 붙여넣기, 본인 키로 교체):
+
+```
+curl -v -G GET "https://dapi.kakao.com/v2/local/search/keyword.json" \
+  --data-urlencode "query=제주 맛집" \
+  -H "Authorization: KakaoAK 여기에_본인_REST_API_키"
+```
+
+→ JSON 형태로 장소 목록이 쭉 뜨면 성공, 401이 뜨면 키를 잘못 복사했거나 앱이 제대로 생성 안 된 것입니다.
+
+- Gemini 키 테스트 (Python으로):
+
+```
+from google import genai
+
+client = genai.Client(api_key="여기에_본인_키")
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="안녕? 한 문장으로 인사해줘"
+)
+print(response.text)
+```
+
+→ 정상 응답 텍스트가 뜨면 성공입니다.
 
 
 
@@ -132,6 +357,7 @@ python -m venv .venv
 
 
 
+API 키 설정방법, 결과물 확인 방법, 키 유출되지 않도록 주의 사항 포함 할 차례     유의 사항은 이미 넣었음
 
 
 
