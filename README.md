@@ -292,19 +292,77 @@ LLM API: Gemini <br>
 
 - Gemini API 키 발급 (Google AI Studio)
 https://aistudio.google.com 접속 → Google 계정으로 로그인
-화면 좌측 사이드바 하단(또는 메인 화면)에 있는 "Get API key" 버튼 클릭
+화면 좌측 사이드바 하단 도큐멘트 누르니 아래로 이동 
 API 키 관리 페이지로 이동 → "API 키 만들기(Create API key)" 버튼 클릭
 연결할 Google Cloud 프로젝트를 선택하는 창이 뜨는데, 기존 프로젝트가 없으면 "새 프로젝트 만들기"를 눌러 하나 생성
-몇 초 뒤 AIza...로 시작하는 키가 발급됨 → 바로 복사해서 메모장에 저장
+몇 초 뒤 AQAb...로 시작하는 키가 발급됨 → 바로 복사해서 메모장에 저장
 참고로 새로 발급한 키는 자동으로 **"승인 키(Auth key)"**로 생성되므로 별도 설정 없이 그대로 쓰면 됩니다.
 무료 티어(분당/일일 요청 제한 있음)로 바로 테스트 가능 — 별도 결제 등록 없이도 시작 가능
 
 💡 Gemini는 이 미션 수준(테스트용 호출 몇 번)에서는 무료 티어만으로 충분해서, "결제 등록"이라는 진입 장벽이 없다는 게 초보자 입장에서 가장 큰 장점입니다.
 
-코드에서 라이브러리 설치:
+- 코드에서 라이브러리 설치:
 ```
 pip install google-genai
 ```
+설치 결과 :  
+```
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> pip install google-genai
+Collecting google-genai
+  Downloading google_genai-2.18.1-py3-none-any.whl.metadata (56 kB)
+Requirement already satisfied: anyio<5.0.0,>=4.8.0 in .\.venv\Lib\site-packages (from google-genai) (4.14.2)
+Collecting google-auth<3.0.0,>=2.56.0 (from google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading google_auth-2.56.3-py3-none-any.whl.metadata (6.0 kB)
+Collecting httpx<1.0.0,>=0.28.1 (from google-genai)
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Requirement already satisfied: pydantic<3.0.0,>=2.12.5 in .\.venv\Lib\site-packages (from google-genai) (2.13.4)
+Requirement already satisfied: requests<3.0.0,>=2.28.1 in .\.venv\Lib\site-packages (from google-genai) (2.34.2)
+Collecting tenacity<9.2.0,>=8.2.3 (from google-genai)
+  Downloading tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting websockets<17.0,>=13.0.0 (from google-genai)
+  Downloading websockets-16.1.1-cp314-cp314-win_amd64.whl.metadata (7.0 kB)
+Requirement already satisfied: typing-extensions<5.0.0,>=4.14.0 in .\.venv\Lib\site-packages (from google-genai) (4.16.0)
+Requirement already satisfied: distro<2,>=1.7.0 in .\.venv\Lib\site-packages (from google-genai) (1.9.0)
+Requirement already satisfied: sniffio in .\.venv\Lib\site-packages (from google-genai) (1.3.1)
+Requirement already satisfied: idna>=2.8 in .\.venv\Lib\site-packages (from anyio<5.0.0,>=4.8.0->google-genai) (3.18)
+Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting cryptography>=41.0.5 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading cryptography-50.0.0-cp311-abi3-win_amd64.whl.metadata (4.3 kB)
+Requirement already satisfied: certifi in .\.venv\Lib\site-packages (from httpx<1.0.0,>=0.28.1->google-genai) (2026.7.22)
+Collecting httpcore==1.* (from httpx<1.0.0,>=0.28.1->google-genai)
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Requirement already satisfied: h11>=0.16 in .\.venv\Lib\site-packages (from httpcore==1.*->httpx<1.0.0,>=0.28.1->google-genai) (0.16.0)
+Requirement already satisfied: annotated-types>=0.6.0 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (0.8.0)
+Requirement already satisfied: pydantic-core==2.46.4 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (2.46.4)
+Requirement already satisfied: typing-inspection>=0.4.2 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (0.4.4)
+Requirement already satisfied: charset_normalizer<4,>=2 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (3.5.1)
+Requirement already satisfied: urllib3<3,>=1.26 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (2.7.0)
+Collecting cffi>=2.0.0 (from cryptography>=41.0.5->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl.metadata (2.6 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=41.0.5->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
+  Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+Downloading google_genai-2.18.1-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 8.5 MB/s  0:00:00
+Downloading google_auth-2.56.3-py3-none-any.whl (259 kB)
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+Downloading websockets-16.1.1-cp314-cp314-win_amd64.whl (179 kB)
+Downloading cryptography-50.0.0-cp311-abi3-win_amd64.whl (3.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.8/3.8 MB 10.4 MB/s  0:00:00
+Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl (187 kB)
+Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+Installing collected packages: websockets, tenacity, pycparser, pyasn1, httpcore, pyasn1-modules, httpx, cffi, cryptography, google-auth, google-genai
+Successfully installed cffi-2.1.1 cryptography-50.0.0 google-auth-2.56.3 google-genai-2.18.1 httpcore-1.0.9 httpx-0.28.1 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 tenacity-9.1.4 websockets-16.1.1
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner>
+```
+
+
 
 
 ### 5. API 키 발급 & 보안 설정 (가장 먼저 해야 할 실질적 작업)
@@ -599,6 +657,42 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+> 포인트 1. .env에서 API 키 가져오기
+> .env --> OPENAI_API_KEY --> Python
+
+```
+load_dotenv()
+
+api_key = os.getenv("OPENAI_API_KEY")
+```
+
+> 포인트 2. OpenAI 연결
+```
+client = OpenAI(api_key=api_key)
+```
+여기서 OpenAI API를 사용할 준비를 하는 거야.
+
+
+> 포인트 3. 실제 API 호출 (핵심)
+> Python --> OpenAI API 요청 --> gEMINI --> 응답
+ ```
+response = client.responses.create(
+    model="gpt-5.6",
+    input=prompt
+)
+```
+
+> 포인트 4. AI가 보내준 텍스트 꺼내기
+```
+return response.output_text
+```
+그래서 최종적으로:
+```
+recommendation = get_travel_recommendation(args.date)
+```
+에 AI의 답변이 들어가게 돼.
+
 
 
 
