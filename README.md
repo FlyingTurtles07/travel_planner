@@ -6,6 +6,11 @@
 
 ### 1. 가상환경 만들기
 VScode에서 터미널을 열고 " python -m venv .venv " 입력 --> 프로젝트 폴더 안에 " .venv " 폴더 생김
+
+> 만약 안된다면 " python -m venv .venv " 대신 " py -m venv .venv " 쓰면 됨
+> 확인 방법은 " python --version "  안먹히면 위에 명령도 안먹힘, 이렇게 " py --version " 해봐서 되면 위희 py명령어 사용 하면 됨
+
+
 ### 2. 가상환경 활성화
 C:\Users\moon7\Desktop\travel_planner\.venv\Scripts 안에서 " activate " 입력하면
   ---> 실행 안되다가 PowerShell Extension v2025.4.0 설치 할꺼냐고 나오고 ---> 설치하면
@@ -30,6 +35,14 @@ PS C:\Users\moon7\Desktop\travel_planner> (Set-ExecutionPolicy -Scope Process -E
 ```
 입력
 
+그리고:
+
+```
+pip freeze > requirements.txt
+```
+
+이렇게 하면 나중에 다른 컴퓨터에서도 필요한 라이브러리를 설치할 수 있습니다.
+
 > ⭐ 주의 사항 아주 쉽게 기억하세요
 
 > 터미널 창에 ' >>> ' 가 보이면 터미널 명령어를 입력하면 안 됩니다. <br>
@@ -40,7 +53,6 @@ PS C:\Users\moon7\Desktop\travel_planner> (Set-ExecutionPolicy -Scope Process -E
 | `>>>`                | Python 실행창     | `print()`, `import` 같은 Python 코드       |
 | `PS C:\...>`         | VS Code 터미널    | `python -m venv`, `pip install` 같은 명령어 |
 | `(.venv) PS C:\...>` | 가상환경이 활성화된 터미널 | `pip install` 등 프로젝트 명령어               |
-
 
 
 ### 4. API 연동 미션에서는 가상환경을 만드는 단계부터 차근차근 해야함.
