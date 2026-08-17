@@ -248,6 +248,7 @@ travel-planner/
 
 > 중요: .env는 GitHub에 절대 올리면 안됨
 
+---
 
 ## 3. API키 준비
 
@@ -363,13 +364,264 @@ print(response.text)
 
 → 정상 응답 텍스트가 뜨면 성공입니다.
 
+---
+
+## 4. travel_planner.py 기본 틀 짜기
+
+```
+import argparse
+from datetime import datetime
+
+
+def validate_date(date_string):
+    """날짜 형식이 YYYY-MM-DD인지 확인"""
+    try:
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def main():
+    # CLI 명령어 설정
+    parser = argparse.ArgumentParser(
+        description="AI 여행 플래너"
+    )
+
+    parser.add_argument(
+        "--date",
+        required=True,
+        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
+    )
+
+    args = parser.parse_args()
+
+    # 날짜 형식 검사
+    if not validate_date(args.date):
+        print("❌ 잘못된 날짜 형식입니다.")
+        print("예시: 2026-03-15")
+        return
+
+    print("=" * 40)
+    print("       AI 여행 플래너")
+    print("=" * 40)
+    print(f"여행 날짜: {args.date}")
+    print("✅ 날짜 형식이 올바릅니다.")
+    print("다음 단계로 진행합니다.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- test 결과 :
+  1. 정상 작동
+입력 : 
+```
+ python travel_planner.py --date "2026-03-15"
+```
+결과 :
+```
+========================================
+       AI 여행 플래너
+========================================
+여행 날짜: 2026-03-15
+✅ 날짜 형식이 올바릅니다.
+다음 단계로 진행합니다.
+```
+  2. 잘못된 날짜 입력 확인
+입력 1 :
+```
+python travel_planner.py --date "abc"
+```
+입력 2 :
+```
+python travel_planner.py --date "2026/03/15"
+```
+
+결과 :
+```
+❌ 잘못된 날짜 형식입니다.
+예시: 2026-03-15
+```
+
+```
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-0
+========================================
+       AI 여행 플래너
+========================================
+여행 날짜: 2026-03-15
+✅ 날짜 형식이 올바릅니다.
+다음 단계로 진행합니다.
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "abc"
+❌ 잘못된 날짜 형식입니다.
+예시: 2026-03-15
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026/03/15"
+❌ 잘못된 날짜 형식입니다.
+예시: 2026-03-15
+```
+<img width="694" height="282" alt="기본 프로그램 실행 결과 캡쳐" src="https://github.com/user-attachments/assets/85f34eb7-9ab6-439a-9cd7-765f3f8e484b" />
+
+
+## 5. OpenAI API 단독 테스트
+OpenAI() 클라이언트를 만들고 responses.create()로 호출하는 방식으로
+
+1. 기본구조 
+```
+날짜 입력
+   ↓
+CLI
+   ↓
+OpenAI API
+   ↓
+AI 응답
+   ↓
+터미널 출력
+```
+
+### 1. .env 에 키 넣기
+
+```
+OPENAI_API_KEY=여기에_본인의_API_키
+```
+> 주의 ) 실제 API 키는 나에게 보내지 마.
+
+### 2. .gitignore 확인
+그리고 .gitignore 확인 반드시 있어야 할 내용:
+```
+.env
+.venv/
+__pycache__/
+```
+
+### 3. travel_planner.py 다음과 같이 수정
+
+```
+import argparse
+import os
+from datetime import datetime
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+
+def validate_date(date_string):
+    """날짜 형식이 YYYY-MM-DD인지 확인"""
+    try:
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def get_travel_recommendation(date):
+    """OpenAI API를 이용해 여행지를 추천받는다."""
+
+    # .env 파일의 환경변수 불러오기
+    load_dotenv()
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    # API 키가 없는 경우
+    if not api_key:
+        print("❌ OPENAI_API_KEY가 설정되지 않았습니다.")
+        print(".env 파일을 확인하세요.")
+        return None
+
+    # OpenAI 클라이언트 생성
+    client = OpenAI(api_key=api_key)
+
+    prompt = f"""
+{date}에 국내 여행을 간다고 가정하고,
+여행하기 좋은 지역 하나를 추천해주세요.
+
+다음 내용을 포함해서 간단하게 설명해주세요.
+
+1. 추천 지역
+2. 추천 이유
+3. 예상되는 여행 분위기
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-5.6",
+            input=prompt
+        )
+
+        return response.output_text
+
+    except Exception as e:
+        print("❌ OpenAI API 호출 중 오류가 발생했습니다.")
+        print(f"오류 내용: {e}")
+        return None
+
+
+def main():
+    # CLI 명령어 설정
+    parser = argparse.ArgumentParser(
+        description="AI 여행 플래너"
+    )
+
+    parser.add_argument(
+        "--date",
+        required=True,
+        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
+    )
+
+    args = parser.parse_args()
+
+    # 날짜 형식 검사
+    if not validate_date(args.date):
+        print("❌ 잘못된 날짜 형식입니다.")
+        print("예시: 2026-03-15")
+        return
+
+    print("=" * 40)
+    print("       AI 여행 플래너")
+    print("=" * 40)
+    print(f"여행 날짜: {args.date}")
+    print("✅ 날짜 형식이 올바릅니다.")
+    print()
+
+    # OpenAI API 호출
+    print("[1/3] 여행지 추천 생성 중(LLM)...")
+
+    recommendation = get_travel_recommendation(args.date)
+
+    if recommendation is None:
+        return
+
+    print()
+    print("===== AI 여행 추천 결과 =====")
+    print(recommendation)
+
+
+if __name__ == "__main__":
+    main()
+```
 
 
 
 
 
 
-API 키 설정방법, 결과물 확인 방법, 키 유출되지 않도록 주의 사항 포함 할 차례     유의 사항은 이미 넣었음
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
