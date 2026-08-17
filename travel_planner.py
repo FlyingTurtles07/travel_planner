@@ -1,5 +1,9 @@
 import argparse
+import os
 from datetime import datetime
+
+from dotenv import load_dotenv
+from openai import OpenAI
 
 
 def validate_date(date_string):
@@ -9,6 +13,48 @@ def validate_date(date_string):
         return True
     except ValueError:
         return False
+
+
+def get_travel_recommendation(date):
+    """OpenAI API를 이용해 여행지를 추천받는다."""
+
+    # .env 파일의 환경변수 불러오기
+    load_dotenv()
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    # API 키가 없는 경우
+    if not api_key:
+        print("❌ OPENAI_API_KEY가 설정되지 않았습니다.")
+        print(".env 파일을 확인하세요.")
+        return None
+
+    # OpenAI 클라이언트 생성
+    client = OpenAI(api_key=api_key)
+
+    prompt = f"""
+{date}에 국내 여행을 간다고 가정하고,
+여행하기 좋은 지역 하나를 추천해주세요.
+
+다음 내용을 포함해서 간단하게 설명해주세요.
+
+1. 추천 지역
+2. 추천 이유
+3. 예상되는 여행 분위기
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-5.6",
+            input=prompt
+        )
+
+        return response.output_text
+
+    except Exception as e:
+        print("❌ OpenAI API 호출 중 오류가 발생했습니다.")
+        print(f"오류 내용: {e}")
+        return None
 
 
 def main():
@@ -36,7 +82,19 @@ def main():
     print("=" * 40)
     print(f"여행 날짜: {args.date}")
     print("✅ 날짜 형식이 올바릅니다.")
-    print("다음 단계로 진행합니다.")
+    print()
+
+    # OpenAI API 호출
+    print("[1/3] 여행지 추천 생성 중(LLM)...")
+
+    recommendation = get_travel_recommendation(args.date)
+
+    if recommendation is None:
+        return
+
+    print()
+    print("===== AI 여행 추천 결과 =====")
+    print(recommendation)
 
 
 if __name__ == "__main__":
