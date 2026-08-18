@@ -252,13 +252,7 @@ travel-planner/
 
 ## 3. API키 준비
 
-### 1. 프로젝트 폴더 (travel_planner)에 .env 만들고 내용 만들기
-```
-OPENAI_API_KEY=실제키
-KAKAO_REST_API_KEY=실제키
-```
-
-### 2. travel_planner에 추가
+### 1. travel_planner에 추가
 ```
 import os
 from dotenv import load_dotenv
@@ -269,12 +263,20 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
 ```
 
-### 3. .gitignore 만들고 내용 추가  --> .env 반드시 추가해야 함
+### 2. .gitignore 만들고 내용 추가  --> .env 반드시 추가해야 함
 
 ```
 .env
 .venv/
 __pycache__/
+```
+
+
+### 3. 프로젝트 폴더 (travel_planner) 한번 push 후 .env 만들고 내용 만들기
+> .ignore랑 같이 만들어 놓고 push하면 gitHub에 올라가 버릴수 있음... 곤란해짐....(실제 키 넣고 push시 보안에 걸려 안올라가지기도 함)
+```
+OPENAI_API_KEY=실제키
+KAKAO_REST_API_KEY=실제키
 ```
 
 ### 4. 시작 전에 결정할 것 (5분)
