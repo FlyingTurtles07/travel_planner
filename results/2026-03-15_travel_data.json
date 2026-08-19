@@ -1,0 +1,20 @@
+{
+    "date": "2026-03-15",
+    "recommendation": {
+        "recommended_city": "광양시",
+        "weather": "맑고 포근한 봄날씨 (최저 3℃ / 최고 14℃ 예상)",
+        "events": [
+            "광양 매화축제",
+            "섬진강변 매화마을 산책"
+        ],
+        "reason": "3월 중순은 섬진강변을 따라 매화가 만개하는 시기로, 아름다운 흰빛 매화 군락과 함께 봄의 시작을 느끼기에 가장 완벽한 여행지입니다."
+    },
+    "places": [],
+    "errors": [
+        {
+            "step": "kakao_restaurant_search",
+            "type": "REQUEST_ERROR",
+            "message": "403 Client Error: Forbidden for url: https://dapi.kakao.com/v2/local/search/keyword.json?query=%EA%B4%91%EC%96%91%EC%8B%9C+%EB%A7%9B%EC%A7%91&size=5"
+        }
+    ]
+}
