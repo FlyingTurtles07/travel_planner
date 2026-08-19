@@ -293,6 +293,8 @@ LLM API: Gemini <br>
 
 
 - Gemini API 키 발급 (Google AI Studio)
+https://aistudio.google.com/app/apikey  (바로접속)
+
 https://aistudio.google.com 접속 → Google 계정으로 로그인
 화면 좌측 사이드바 하단 도큐멘트 누르니 아래로 이동 
 API 키 관리 페이지로 이동 → "API 키 만들기(Create API key)" 버튼 클릭
@@ -523,7 +525,7 @@ python travel_planner.py --date "2026/03/15"
 <img width="694" height="282" alt="기본 프로그램 실행 결과 캡쳐" src="https://github.com/user-attachments/assets/85f34eb7-9ab6-439a-9cd7-765f3f8e484b" />
 
 
-## 5. OpenAI API 단독 테스트
+## 5. OpenAI API 단독 테스트??? ---> Gemini API 키 발급 받고, pip install google-genai 설치하고 OpenAI용으로 잘못 짜서 5.1에서 Gemini API로 변경 함
 OpenAI() 클라이언트를 만들고 responses.create()로 호출하는 방식으로
 
 1. 기본구조 
@@ -694,6 +696,152 @@ return response.output_text
 recommendation = get_travel_recommendation(args.date)
 ```
 에 AI의 답변이 들어가게 돼.
+
+
+## 5.1 Gemini API로 변경 
+
+```
+import argparse
+import os
+from datetime import datetime
+
+from dotenv import load_dotenv
+from google import genai
+
+
+def validate_date(date_string):
+    """날짜 형식이 YYYY-MM-DD인지 확인"""
+    try:
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def get_travel_recommendation(date):
+    """Gemini API를 이용해 여행지를 추천받는다."""
+
+    # .env 파일 불러오기
+    load_dotenv()
+
+    # Gemini API 키 가져오기
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    # API 키가 없는 경우
+    if not api_key:
+        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
+        print(".env 파일을 확인하세요.")
+        return None
+
+    try:
+        # Gemini 클라이언트 생성
+        client = genai.Client(api_key=api_key)
+
+        prompt = f"""
+{date}에 국내 여행을 간다고 가정하고,
+여행하기 좋은 지역 하나를 추천해주세요.
+
+다음 내용을 포함해서 간단하게 설명해주세요.
+
+1. 추천 지역
+2. 추천 이유
+3. 예상되는 여행 분위기
+"""
+
+        # Gemini API 호출
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt
+        )
+
+        return response.text
+
+    except Exception as e:
+        print("❌ Gemini API 호출 중 오류가 발생했습니다.")
+        print(f"오류 내용: {e}")
+        return None
+
+
+def main():
+    # CLI 명령어 설정
+    parser = argparse.ArgumentParser(
+        description="AI 여행 플래너"
+    )
+
+    parser.add_argument(
+        "--date",
+        required=True,
+        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
+    )
+
+    args = parser.parse_args()
+
+    # 날짜 형식 검사
+    if not validate_date(args.date):
+        print("❌ 잘못된 날짜 형식입니다.")
+        print("예시: 2026-03-15")
+        return
+
+    print("=" * 40)
+    print("       AI 여행 플래너")
+    print("=" * 40)
+    print(f"여행 날짜: {args.date}")
+    print("✅ 날짜 형식이 올바릅니다.")
+    print()
+
+    # Gemini API 호출
+    print("[1/3] 여행지 추천 생성 중(Gemini)...")
+
+    recommendation = get_travel_recommendation(args.date)
+
+    if recommendation is None:
+        return
+
+    print()
+    print("===== AI 여행 추천 결과 =====")
+    print(recommendation)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+PowerShell 실행 결과
+
+```
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-03-15"
+========================================
+       AI 여행 플래너
+========================================
+여행 날짜: 2026-03-15
+✅ 날짜 형식이 올바릅니다.
+
+[1/3] 여행지 추천 생성 중(Gemini)...
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+
+===== AI 여행 추천 결과 =====
+2026년 3월 15일 봄의 시작을 맞이하여 추천하는 국내 여행지는 **'제주도(특히 서귀포 및 남부 지역)'**입니다.
+
+---
+
+### 1. 추천 지역
+* **제주특별자치도 서귀포시 일대** (산방산, 섭지코지, 성산일출봉 주변 등)
+
+### 2. 추천 이유
+* **가장 먼저 만나는 완연한 봄:** 3월 중순은 육지에 비해 기온이 포근하여 봄 기운을 가장 빠르게 체감할 수 있는 시기입니다.
+* **유채꽃의 절정:** 이 시기 서귀포와 동부 일대는 노란 **유채꽃이 만개**하여 섬 전체가 화사하게 물듭니다.
+* **여유로운 여행 가능:** 3월 말부터 시작되는 본격적인 벚꽃 시즌이나 4월 봄방학 전이라, 비교적 덜 붐비고 쾌적하게 여행을 즐길 수 있습니다.
+
+### 3. 예상되는 여행 분위기
+* **화사하고 싱그러운 분위기:** 파란 제주 바다와 대비되는 노란 유채꽃밭을 배경으로 따스한 햇살을 받으며 여행하는 화사한 분위기입니다.
+* **설레고 여유로운 봄 드라이브:** 포근한 해안 바람을 맞으며 해안도로를 드라이브하고, 야외 카페 테라스에서 느긋하게 휴식을 취하는 '설렘 가득한 휴양'의 분위기를 느끼실 수 있습니다.
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> 
+
+```
+
+
+
 
 
 

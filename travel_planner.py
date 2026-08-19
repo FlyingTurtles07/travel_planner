@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from google import genai
 
 
 def validate_date(date_string):
@@ -16,23 +16,25 @@ def validate_date(date_string):
 
 
 def get_travel_recommendation(date):
-    """OpenAI API를 이용해 여행지를 추천받는다."""
+    """Gemini API를 이용해 여행지를 추천받는다."""
 
-    # .env 파일의 환경변수 불러오기
+    # .env 파일 불러오기
     load_dotenv()
 
-    api_key = os.getenv("OPENAI_API_KEY")
+    # Gemini API 키 가져오기
+    api_key = os.getenv("GEMINI_API_KEY")
 
     # API 키가 없는 경우
     if not api_key:
-        print("❌ OPENAI_API_KEY가 설정되지 않았습니다.")
+        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
         print(".env 파일을 확인하세요.")
         return None
 
-    # OpenAI 클라이언트 생성
-    client = OpenAI(api_key=api_key)
+    try:
+        # Gemini 클라이언트 생성
+        client = genai.Client(api_key=api_key)
 
-    prompt = f"""
+        prompt = f"""
 {date}에 국내 여행을 간다고 가정하고,
 여행하기 좋은 지역 하나를 추천해주세요.
 
@@ -43,16 +45,16 @@ def get_travel_recommendation(date):
 3. 예상되는 여행 분위기
 """
 
-    try:
-        response = client.responses.create(
-            model="gpt-5.6",
-            input=prompt
+        # Gemini API 호출
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt
         )
 
-        return response.output_text
+        return response.text
 
     except Exception as e:
-        print("❌ OpenAI API 호출 중 오류가 발생했습니다.")
+        print("❌ Gemini API 호출 중 오류가 발생했습니다.")
         print(f"오류 내용: {e}")
         return None
 
@@ -84,8 +86,8 @@ def main():
     print("✅ 날짜 형식이 올바릅니다.")
     print()
 
-    # OpenAI API 호출
-    print("[1/3] 여행지 추천 생성 중(LLM)...")
+    # Gemini API 호출
+    print("[1/3] 여행지 추천 생성 중(Gemini)...")
 
     recommendation = get_travel_recommendation(args.date)
 
