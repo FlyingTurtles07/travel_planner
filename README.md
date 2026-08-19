@@ -1082,6 +1082,393 @@ print(recommendation.recommended_city)
 
 ## 7. JSON 파싱 실패 처리
 
+### 1. Gemini JSON 파싱 실패 → 최대 1회 재요청, <br> 그래도 실패하면 오류 기록 후 종료 하도록 설계
+
+이유 : LLM은 가끔 JSON 주변에 설명을 붙일 수 있는데 그러면 JSON파싱에 문제 발생 하기 때문에
+```
+try:
+    ...
+except:
+    ...
+``` 
+
+로 처리하고 최대 1회 재요청 하도록 만든다
+
+구조 : 
+```
+JSON 파싱 실패
+      ↓
+1회 재요청
+      ↓
+성공 → 진행
+실패 → 오류 기록
+```
+
+### 2. requirements.txt 업데이트
+이번에 pydantic, google-genai를 추가했으니까 터미널에서:
+```
+pip freeze > requirements.txt
+```
+실행해주면 이제 다른 컴퓨터에서 나중에:
+```
+pip install -r requirements.txt
+```
+로 필요한 라이브러리를 한꺼번에 설치할 수 있음.
+
+
+### 3. travel_planner.py 수정
+```
+import argparse
+import json
+import os
+from datetime import datetime
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+
+
+# ----------------------------------------
+# Gemini가 반환할 JSON 구조
+# ----------------------------------------
+
+class TravelRecommendation(BaseModel):
+    recommended_city: str
+    weather: str
+    events: list[str]
+    reason: str
+
+
+# ----------------------------------------
+# 날짜 형식 검사
+# ----------------------------------------
+
+def validate_date(date_string):
+    """날짜 형식이 YYYY-MM-DD인지 확인"""
+    try:
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+# ----------------------------------------
+# Gemini API 호출
+# ----------------------------------------
+
+def request_gemini(client, date):
+    """Gemini에게 여행 추천 JSON을 요청한다."""
+
+    prompt = f"""
+{date}에 국내 여행을 간다고 가정하고,
+여행하기 좋은 지역 하나를 추천해주세요.
+
+다음 정보를 작성해주세요.
+
+- 추천 지역
+- 예상 날씨
+- 해당 날짜에 즐길 수 있는 행사나 축제
+- 추천 이유
+
+반드시 지정된 JSON 구조로 응답하세요.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=TravelRecommendation,
+        ),
+    )
+
+    return response.text
+
+
+# ----------------------------------------
+# Gemini 여행 추천
+# ----------------------------------------
+
+def get_travel_recommendation(date):
+    """Gemini API 호출 + JSON 파싱 + 1회 재요청"""
+
+    load_dotenv()
+
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
+        print(".env 파일을 확인하세요.")
+        return None, {
+            "step": "llm_recommendation",
+            "type": "MISSING_API_KEY",
+            "message": "GEMINI_API_KEY가 설정되지 않았습니다."
+        }
+
+    client = genai.Client(api_key=api_key)
+
+    # ----------------------------------------
+    # 최초 요청
+    # ----------------------------------------
+
+    for attempt in range(2):
+
+        try:
+            if attempt == 0:
+                print("[Gemini] 1차 JSON 요청 중...")
+            else:
+                print("[Gemini] JSON 파싱 실패 → 1회 재요청 중...")
+
+            response_text = request_gemini(client, date)
+
+            # JSON 파싱
+            recommendation = TravelRecommendation.model_validate_json(
+                response_text
+            )
+
+            print("✅ JSON 파싱 성공")
+
+            return recommendation, None
+
+        except Exception as e:
+
+            # 첫 번째 실패라면 한 번 더 시도
+            if attempt == 0:
+                print("⚠️ JSON 파싱에 실패했습니다.")
+                print("   1회 재요청합니다.")
+                continue
+
+            # 두 번째도 실패하면 오류 반환
+            print("❌ JSON 파싱 재시도도 실패했습니다.")
+
+            error_info = {
+                "step": "llm_recommendation",
+                "type": "JSON_PARSE_ERROR",
+                "message": str(e)
+            }
+
+            return None, error_info
+
+    return None, {
+        "step": "llm_recommendation",
+        "type": "UNKNOWN_ERROR",
+        "message": "알 수 없는 오류가 발생했습니다."
+    }
+
+
+# ----------------------------------------
+# JSON 결과 저장
+# ----------------------------------------
+
+def save_travel_data(date, recommendation, errors=None):
+    """여행 데이터를 JSON 파일로 저장한다."""
+
+    # results 폴더 생성
+    os.makedirs("results", exist_ok=True)
+
+    filename = f"results/{date}_travel_data.json"
+
+    data = {
+        "date": date,
+        "recommendation": recommendation.model_dump(),
+        "places": [],
+        "errors": errors or []
+    }
+
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
+
+    return filename
+
+
+# ----------------------------------------
+# 메인 프로그램
+# ----------------------------------------
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        description="AI 여행 플래너"
+    )
+
+    parser.add_argument(
+        "--date",
+        required=True,
+        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
+    )
+
+    args = parser.parse_args()
+
+    # ----------------------------------------
+    # 날짜 검사
+    # ----------------------------------------
+
+    if not validate_date(args.date):
+        print("❌ 잘못된 날짜 형식입니다.")
+        print("예시: 2026-03-15")
+        return
+
+    print("=" * 40)
+    print("       AI 여행 플래너")
+    print("=" * 40)
+    print(f"여행 날짜: {args.date}")
+    print("✅ 날짜 형식이 올바릅니다.")
+    print()
+
+    # ----------------------------------------
+    # Gemini 1차 추천
+    # ----------------------------------------
+
+    print("[1/3] 1차 추천 생성 중(Gemini)...")
+
+    recommendation, error = get_travel_recommendation(
+        args.date
+    )
+
+    # Gemini 실패
+    if recommendation is None:
+
+        print()
+        print("❌ 1차 여행 추천을 생성하지 못했습니다.")
+
+        # 오류도 JSON으로 저장
+        filename = save_error_data(
+            args.date,
+            error
+        )
+
+        print(f"오류 기록 저장: {filename}")
+
+        return
+
+    # ----------------------------------------
+    # 결과 출력
+    # ----------------------------------------
+
+    print()
+    print("===== 1차 여행 추천 결과 =====")
+
+    print(f"추천 지역: {recommendation.recommended_city}")
+    print(f"날씨: {recommendation.weather}")
+    print(f"추천 이유: {recommendation.reason}")
+
+    print("행사/축제:")
+
+    for event in recommendation.events:
+        print(f"  - {event}")
+
+    # ----------------------------------------
+    # JSON 파일 저장
+    # ----------------------------------------
+
+    filename = save_travel_data(
+        args.date,
+        recommendation
+    )
+
+    print()
+    print("===== 저장 완료 =====")
+    print(f"JSON 파일: {filename}")
+
+
+# ----------------------------------------
+# 오류 데이터 저장
+# ----------------------------------------
+
+def save_error_data(date, error):
+    """API 또는 JSON 파싱 실패 내용을 저장한다."""
+
+    os.makedirs("results", exist_ok=True)
+
+    filename = f"results/{date}_travel_data.json"
+
+    data = {
+        "date": date,
+        "recommendation": None,
+        "places": [],
+        "errors": [error]
+    }
+
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
+
+    return filename
+
+
+if __name__ == "__main__":
+    main()
+```
+
+> 포인트 1. JSON 파싱 실패 시 1회 재요청
+```
+for attempt in range(2):
+```
+이 부분이 최대 2번 요청하게 만드는 부분임
+```
+1차 요청
+   ↓
+JSON 파싱 성공
+   ↓
+   종료
+```
+or
+```
+1차 요청
+   ↓
+JSON 파싱 실패
+   ↓
+재요청 1회
+   ↓
+   ├─ 성공 → 진행
+   │
+   └─ 실패 → 오류 기록
+```
+
+> 포인트 2. travel_data.json 저장 구조
+
+최종적으로 얻은 1차 추천 데이터를 results/travel_data.json에 저장
+
+정상적으로 성공하면 프로젝트 폴더에 자동으로:
+
+results 폴더가  생기고 안에 2026-03-15_travel_data.json 파일 생성됨
+
+파일 내용 : 
+```
+{
+    "date": "2026-03-15",
+    "recommendation": {
+        "recommended_city": "제주",
+        "weather": "따뜻한 봄 날씨",
+        "events": [
+            "유채꽃 축제"
+        ],
+        "reason": "봄꽃을 즐기기 좋기 때문입니다."
+    },
+    "places": [],
+    "errors": []
+}
+```
 
 
 ## 8. Kakao 맛집 검색 결과가 0개여도 프로그램이 죽지 않는 처리를 추가
@@ -1506,39 +1893,67 @@ except requests.RequestException:
 처리 하므로 맛집 API가 실패해도 프로그램 전체가 죽지 않음
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-LLM은 가끔 JSON 주변에 설명을 붙일 수 있는데 그러면 JSON파싱에 문제 발생 하기 때문에
+> 포인트 4. 실행결과
 ```
-try:
-    ...
-except:
-    ...
-``` 
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-03-15"
+========================================
+       AI 여행 플래너
+========================================
+여행 날짜: 2026-03-15
+✅ 날짜 형식이 올바릅니다.
 
-로 처리하고 최대 1회 재요청 하도록 만든다
+[1/3] 1차 추천 생성 중(Gemini)...
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
 
-구조 : 
+===== 1차 여행 추천 결과 =====
+추천 지역: 전라남도 광양시
+날씨: 최저 2℃, 최고 14℃ 안팎으로 포근하며 야외 활동하기 좋은 맑은 봄날씨가 예상됩니다.
+추천 이유: 3월 중순은 봄의 전령사인 매화가 만개하는 시기로, 섬진강변을 따라 하얗게 물든 매화마을의 장관을 감상하며 완연한 봄 기운을 느끼기에 최적의 여행지입니다.
+행사/축제:
+  - 광양매화축제
+  - 섬진강 매화마을 봄꽃 산책
+
+===== JSON 데이터 =====
+{
+    "recommended_city": "전라남도 광양시",
+    "weather": "최저 2℃, 최고 14℃ 안팎으로 포근하며 야외 활동하기 좋은 맑은 봄날씨가 예상됩니다.",
+    "events": [
+        "광양매화축제",
+        "섬진강 매화마을 봄꽃 산책"
+    ],
+    "reason": "3월 중순은 봄의 전령사인 매화가 만개하는 시기로, 섬진강변을 따라 하얗게 물든 매화마을의 장관을 감상하며 완연한 봄 기운을 느끼기에 최적의 여행지입니다."
+}
+
+[2/3] 맛집 검색 중(Kakao Local)...
+  - Kakao API 요청 중 오류가 발생했습니다.
+  - 오류 내용: 403 Client Error: Forbidden for url: https://dapi.kakao.com/v2/local/search/keyword.json?query=%EC%A0%84%EB%9D%BC%EB%82%A8%EB%8F%84+%EA%B4%91%EC%96%91%EC%8B%9C+%EB%A7%9B%EC%A7%91&size=5
+  - 다음 단계로 진행합니다.
+
+===== 맛집 검색 결과 =====
+검색된 맛집이 없습니다.
+맛집 데이터 없이 다음 단계로 진행합니다.
+
+[3/3] 최종 리포트 생성 단계는 다음 STEP에서 추가합니다.
+
+========================================
+현재 STEP 12까지 완료
+========================================
+(.venv) PS C:\Users\swedu18\Desktop\travel_planner> 
 ```
-JSON 파싱 실패
-      ↓
-1회 재요청
-      ↓
-성공 → 진행
-실패 → 오류 기록
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
