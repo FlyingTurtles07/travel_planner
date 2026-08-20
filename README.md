@@ -1,3222 +1,663 @@
-# travel_planner
+# AI 여행 플래너
+
+## 1. 프로젝트 소개
+
+AI 여행 플래너는 사용자가 입력한 여행 날짜를 기반으로 AI가 국내 여행지를 추천하고, 추천 지역의 맛집을 검색한 후 최종 여행 리포트를 생성하는 Python 콘솔 프로그램입니다.
+
+Gemini API와 Kakao Local API를 연결하여 여러 API의 결과를 하나의 여행 정보로 통합합니다.
+
+이 프로젝트의 전체 흐름은 다음과 같습니다.
+
+```text
+여행 날짜 입력
+    ↓
+날짜 형식 검사
+    ↓
+Gemini 1차 여행지 추천
+    ↓
+구조화된 JSON 검증
+    ↓
+recommended_city 추출
+    ↓
+Kakao Local API 맛집 검색
+    ↓
+추천 정보 + 맛집 정보 통합
+    ↓
+Gemini 최종 여행 리포트 생성
+    ↓
+JSON + Markdown 파일 저장
+```
 
 ---
 
-## 0. API 발급 전 기본 셋팅하기 
+## 2. 주요 기능
 
-### 1. 가상환경 만들기
-VScode에서 터미널을 열고 " python -m venv .venv " 입력 --> 프로젝트 폴더 안에 " .venv " 폴더 생김
+### ① 날짜 입력 및 검증
 
-> 만약 안된다면 " python -m venv .venv " 대신 " py -m venv .venv " 쓰면 됨
-> 확인 방법은 " python --version "  안먹히면 위에 명령도 안먹힘, 이렇게 " py --version " 해봐서 되면 위희 py명령어 사용 하면 됨
+명령줄에서 여행 날짜를 `YYYY-MM-DD` 형식으로 입력합니다.
 
-
-### 2. 가상환경 활성화
-C:\Users\moon7\Desktop\travel_planner\.venv\Scripts 안에서 " activate " 입력하면
-  ---> 실행 안되다가 PowerShell Extension v2025.4.0 설치 할꺼냐고 나오고 ---> 설치하면
-
-터미널이 새로운 PowerShell 열리면서
-```
-PowerShell Extension v2025.4.0
-Copyright (c) Microsoft Corporation.
-
-https://aka.ms/vscode-powershell
-Type 'help' to get help.
-
-PS C:\Users\moon7\Desktop\travel_planner> (Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned) ; (& c:\Users\moon7\Desktop\travel_planner\.venv\Scripts\Activate.ps1)
-(.venv) PS C:\Users\moon7\Desktop\travel_planner>
-```
-이렇게 변함
-
-### 3. 라이브러리 설치
-터미널에서 --> 반드시 " (.venv) PS C:\Users\moon7\Desktop\travel_planner> " 에서 입력해야 함
-```
-(.venv) PS C:\Users\moon7\Desktop\travel_planner> pip install requests python-dotenv openai
-```
-입력
-
-그리고:
-
-```
-pip freeze > requirements.txt
+```powershell
+python travel_planner.py --date 2026-03-15
 ```
 
-이렇게 하면 나중에 다른 컴퓨터에서도 필요한 라이브러리를 설치할 수 있습니다.
+입력된 날짜가 올바른 날짜 형식인지 검사합니다.
 
-> ⭐ 주의 사항 아주 쉽게 기억하세요
-
-> 터미널 창에 ' >>> ' 가 보이면 터미널 명령어를 입력하면 안 됩니다. <br>
-> 우선 >>> exit()만 입력해서 >>>를 없애는 것부터..... 
-
-| 화면                   | 의미             | 입력하는 것                                 |
-| -------------------- | -------------- | -------------------------------------- |
-| `>>>`                | Python 실행창     | `print()`, `import` 같은 Python 코드       |
-| `PS C:\...>`         | VS Code 터미널    | `python -m venv`, `pip install` 같은 명령어 |
-| `(.venv) PS C:\...>` | 가상환경이 활성화된 터미널 | `pip install` 등 프로젝트 명령어               |
-
-
-### 4. API 연동 미션에서는 가상환경을 만드는 단계부터 차근차근 해야함.
-
-
-
-
----
----
-### * 더 자세한 보충 설명
-
-#### 1. 라이브러리란?
-
-쉽게 말하면 다른 사람이 미리 만들어 놓은 Python 기능 묶음입니다.
-
-예를 들어 우리가 API를 직접 연결하려면 여러 가지 복잡한 코드를 작성해야 하는데, 다른 개발자들이 이미 만들어 놓은 라이브러리를 가져다 쓰면 훨씬 쉽게 할 수 있습니다.
-
-
-- 이번 미션에서 설치하는 것이 바로 아래 3가지 입니다.
-
-① requests     ---> "requests = 다른 API에 요청 보내기"
-
-인터넷으로 API에 요청을 보내기 위한 도구입니다.
-
-예를 들어 우리가 지도 API나 관광 API에
-
-"이 지역의 관광지 정보를 주세요." 라고 요청하려면 인터넷을 통해 요청을 보내야 합니다.
-
-그때 python프로그램에서 아래처럼 requests를 사용.
-
-```
-import requests
-```
-
-
-② python-dotenv     ---> "python-dotenv = .env 파일에 저장한 비밀 정보 가져오기"
-
-API를 사용할 때 API 키라는 비밀번호 같은 정보를 사용하는 경우가 많습니다.
-
-예를 들어 : OPENAI_API_KEY=xxxxxxxxxxxxxxxx
-
-이런 정보를 Python 코드에 직접 적어버리면 보안상 좋지 않습니다.
-
-그래서 .env라는 파일에 넣어두고 Python에서 가져오는 방법을 사용합니다.
-
-이때 python-dotenv가 필요합니다.
-
-```
-from dotenv import load_dotenv
-```
-
-③ openai     ---> openai = Python에서 OpenAI API 사용하기
-
-이번 미션에서 OpenAI API를 사용하기 위한 라이브러리입니다.
-
-예를 들어 Python 프로그램에서 AI에게
-
-"이 여행지에 대한 여행 코스를 추천해줘."
-
-라고 요청하려면 OpenAI API와 연결해야 합니다.
-
-그때 사용하는 것이 openai입니다.
-
-```
-from openai import OpenAI
-```
-
-> (.venv) PS C:\Users\moon7\Desktop\travel_planner> pip install requests python-dotenv openai
-> " pip install requests python-dotenv openai " 는
-> ---> "Python아, requests, python-dotenv, openai 필요한 3가지 도구를 다운로드해서 설치해줘." 라는 명령임
-```
-Collecting requests
-  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
-Collecting python-dotenv
-  Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
-Collecting openai
-  Downloading openai-3.1.0-py3-none-any.whl.metadata (39 kB)
-  ```
-
-#### 2. 가상환경 .venv를 먼저 만든 이유?
-
----> 이번 프로젝트만을 위한 별도의 Python 작업 공간을 만드는 것 <br>
-     프로젝트마다 필요한 라이브러리와 버전이 다를 수 있기 때문에 프로젝트마다 
-     " .venv "라는 독립된 가상환경을 만들어 사용 해야 함.
-
-```
-python -m venv .venv
-```
-#### 3. 과정을 간단하게 나타내면
-
-```
-내 컴퓨터
-│
-├─ Python
-│
-└─ 여행 API 프로젝트
-     │
-     └─ .venv  ← 이 프로젝트 전용 작업공간
-          │
-          ├─ requests
-          ├─ python-dotenv
-          └─ openai
-
-
-Python 프로그램
-      │
-      ├── requests ─────→ 관광/지도 API
-      │
-      ├── python-dotenv ─→ API 키
-      │
-      └── openai ───────→ OpenAI API
-```
-
-
+잘못된 날짜를 입력하면 프로그램을 종료하고 올바른 형식의 예시를 보여줍니다.
 
 ---
 
+### ② Gemini AI 여행지 추천
 
+Gemini API를 이용하여 입력한 여행 날짜에 적합한 국내 여행지를 추천받습니다.
 
-## 1. 전체 구조 잡기
+Gemini의 1차 응답은 다음 구조로 관리합니다.
 
-### 날짜 → AI 지역 추천 → 추천 지역을 지도 API에 전달 → 맛집 검색 → 다시 AI에게 전달 → 여행 리포트 생성
-
-```
-사용자
-  │
-  │ -date "2026-03-15"
-  ▼
-① Python CLI
-  │
-  ▼
-② LLM API
-  │
-  │ 날짜를 전달
-  │
-  ▼
-[1차 추천 JSON]
-  ├─ recommended_city
-  ├─ weather
-  ├─ events
-  └─ reason
-       │
-       │ recommended_city 전달
-       ▼
-③ 지도/장소 API
-       │
-       ▼
-[맛집 검색 결과]
-  ├─ name
-  ├─ address
-  ├─ category
-  ├─ url
-  ├─ x
-  └─ y
-       │
-       │ 1차 추천 + 맛집
-       ▼
-④ LLM API
-       │
-       ▼
-⑤ 최종 여행 리포트
-       │
-       ├─ JSON 저장
-       └─ Markdown 저장
-```
-
-## 2. 전체 폴더 구조 및 각 파일의 역할
-
-```
-travel-planner/
-│
-├─ travel_planner.py
-├─ .env
-├─ .gitignore
-├─ README.md
-├─ requirements.txt
-│
-└─ results/
-   ├─ 2026-03-15_travel_data.json
-   └─ 2026-03-15_travel_plan.md
-```
-
-| 파일                  | 역할                          |
-| ------------------- | --------------------------- |
-| `travel_planner.py` | 메인 Python 프로그램              |
-| `.env`              | API 키 보관                    |
-| `.gitignore`        | `.env`가 GitHub에 올라가지 않도록 차단 |
-| `README.md`         | 프로그램 설명서                    |
-| `requirements.txt`  | 필요한 Python 라이브러리            |
-| `results/`          | 실행 결과 저장                    |
-| `.json`             | API 원본/구조화 데이터              |
-| `.md`               | 최종 여행 리포트                   |
-
-> 중요: .env는 GitHub에 절대 올리면 안됨
-
----
-
-## 3. API키 준비
-
-### 1. travel_planner에 추가
-```
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-openai_api_key = os.getenv("OPENAI_API_KEY")
-kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
-```
-
-### 2. .gitignore 만들고 내용 추가  --> .env 반드시 추가해야 함
-
-```
-.env
-.venv/
-__pycache__/
-```
-
-
-### 3. 프로젝트 폴더 (travel_planner) 한번 push 후 .env 만들고 내용 만들기
-> .ignore랑 같이 만들어 놓고 push하면 gitHub에 올라가 버릴수 있음... 곤란해짐....(실제 키 넣고 push시 보안에 걸려 안올라가지기도 함)
-```
-OPENAI_API_KEY=실제키
-KAKAO_REST_API_KEY=실제키
-```
-
-### 4. 시작 전에 결정할 것 (5분)
-
-LLM API: Gemini <br>
-장소 API: Kakao Local
-
-> LLM API: OpenAI vs Gemini 중 1개 선택 (계정 있는 쪽, 또는 무료 크레딧 있는 쪽)
-
-> 장소 API: Kakao Local vs Naver Local Search 중 1개 선택 (Kakao가 문서/커뮤니티 자료 많아서 초보자에게 편함)
-
-> 이 선택에 따라 필요한 API 키 발급 사이트가 다르니, 이걸 제일 먼저 정해야 다음 단계(키 발급)로 넘어갈 수 있어요.
-
-
-
-- Gemini API 키 발급 (Google AI Studio)
-https://aistudio.google.com/app/apikey  (바로접속)
-
-https://aistudio.google.com 접속 → Google 계정으로 로그인
-화면 좌측 사이드바 하단 도큐멘트 누르니 아래로 이동 
-API 키 관리 페이지로 이동 → "API 키 만들기(Create API key)" 버튼 클릭
-연결할 Google Cloud 프로젝트를 선택하는 창이 뜨는데, 기존 프로젝트가 없으면 "새 프로젝트 만들기"를 눌러 하나 생성
-몇 초 뒤 AQAb...로 시작하는 키가 발급됨 → 바로 복사해서 메모장에 저장
-참고로 새로 발급한 키는 자동으로 **"승인 키(Auth key)"**로 생성되므로 별도 설정 없이 그대로 쓰면 됩니다.
-무료 티어(분당/일일 요청 제한 있음)로 바로 테스트 가능 — 별도 결제 등록 없이도 시작 가능
-
-💡 Gemini는 이 미션 수준(테스트용 호출 몇 번)에서는 무료 티어만으로 충분해서, "결제 등록"이라는 진입 장벽이 없다는 게 초보자 입장에서 가장 큰 장점입니다.
-
-- 코드에서 라이브러리 설치:
-```
-pip install google-genai
-```
-설치 결과 :  
-```
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> pip install google-genai
-Collecting google-genai
-  Downloading google_genai-2.18.1-py3-none-any.whl.metadata (56 kB)
-Requirement already satisfied: anyio<5.0.0,>=4.8.0 in .\.venv\Lib\site-packages (from google-genai) (4.14.2)
-Collecting google-auth<3.0.0,>=2.56.0 (from google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading google_auth-2.56.3-py3-none-any.whl.metadata (6.0 kB)
-Collecting httpx<1.0.0,>=0.28.1 (from google-genai)
-  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
-Requirement already satisfied: pydantic<3.0.0,>=2.12.5 in .\.venv\Lib\site-packages (from google-genai) (2.13.4)
-Requirement already satisfied: requests<3.0.0,>=2.28.1 in .\.venv\Lib\site-packages (from google-genai) (2.34.2)
-Collecting tenacity<9.2.0,>=8.2.3 (from google-genai)
-  Downloading tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
-Collecting websockets<17.0,>=13.0.0 (from google-genai)
-  Downloading websockets-16.1.1-cp314-cp314-win_amd64.whl.metadata (7.0 kB)
-Requirement already satisfied: typing-extensions<5.0.0,>=4.14.0 in .\.venv\Lib\site-packages (from google-genai) (4.16.0)
-Requirement already satisfied: distro<2,>=1.7.0 in .\.venv\Lib\site-packages (from google-genai) (1.9.0)
-Requirement already satisfied: sniffio in .\.venv\Lib\site-packages (from google-genai) (1.3.1)
-Requirement already satisfied: idna>=2.8 in .\.venv\Lib\site-packages (from anyio<5.0.0,>=4.8.0->google-genai) (3.18)
-Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
-Collecting cryptography>=41.0.5 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading cryptography-50.0.0-cp311-abi3-win_amd64.whl.metadata (4.3 kB)
-Requirement already satisfied: certifi in .\.venv\Lib\site-packages (from httpx<1.0.0,>=0.28.1->google-genai) (2026.7.22)
-Collecting httpcore==1.* (from httpx<1.0.0,>=0.28.1->google-genai)
-  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
-Requirement already satisfied: h11>=0.16 in .\.venv\Lib\site-packages (from httpcore==1.*->httpx<1.0.0,>=0.28.1->google-genai) (0.16.0)
-Requirement already satisfied: annotated-types>=0.6.0 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (0.8.0)
-Requirement already satisfied: pydantic-core==2.46.4 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (2.46.4)
-Requirement already satisfied: typing-inspection>=0.4.2 in .\.venv\Lib\site-packages (from pydantic<3.0.0,>=2.12.5->google-genai) (0.4.4)
-Requirement already satisfied: charset_normalizer<4,>=2 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (3.5.1)
-Requirement already satisfied: urllib3<3,>=1.26 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (2.7.0)
-Collecting cffi>=2.0.0 (from cryptography>=41.0.5->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl.metadata (2.6 kB)
-Collecting pycparser (from cffi>=2.0.0->cryptography>=41.0.5->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
-Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai)
-  Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
-Downloading google_genai-2.18.1-py3-none-any.whl (1.1 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 8.5 MB/s  0:00:00
-Downloading google_auth-2.56.3-py3-none-any.whl (259 kB)
-Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
-Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
-Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
-Downloading websockets-16.1.1-cp314-cp314-win_amd64.whl (179 kB)
-Downloading cryptography-50.0.0-cp311-abi3-win_amd64.whl (3.8 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.8/3.8 MB 10.4 MB/s  0:00:00
-Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl (187 kB)
-Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
-Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
-Downloading pycparser-3.0-py3-none-any.whl (48 kB)
-Installing collected packages: websockets, tenacity, pycparser, pyasn1, httpcore, pyasn1-modules, httpx, cffi, cryptography, google-auth, google-genai
-Successfully installed cffi-2.1.1 cryptography-50.0.0 google-auth-2.56.3 google-genai-2.18.1 httpcore-1.0.9 httpx-0.28.1 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 tenacity-9.1.4 websockets-16.1.1
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner>
-```
-
-
-
-
-### 5. API 키 발급 & 보안 설정 (가장 먼저 해야 할 실질적 작업)
-선택한 LLM API 키 발급 (Google AI Studio) <br>
-선택한 장소 API 키 발급 (Kakao Developers)
-
-> 선택한 LLM API 키 발급 (OpenAI platform 또는 Google AI Studio)
-
-> 선택한 장소 API 키 발급 (Kakao Developers 또는 Naver Developers)
-
-> python-dotenv 설치 후 os.getenv()로 키 불러오는 테스트 코드 작성
-
-> 이 단계에서 키가 제대로 로드되는지 print(len(key)) 정도로만 확인하고 절대 키 자체를 출력하지 않기
-
-
-- Kakao Local API 키 발급 (Kakao Developers)
-https://developers.kakao.com 접속 → 카카오 계정으로 로그인
-상단 메뉴 "내 애플리케이션" 클릭
-"애플리케이션 추가하기" 버튼 클릭
-앱 이름(예: 여행플래너), 사업자명(개인이면 본인 이름/닉네임)을 입력하고 저장
-생성된 앱 카드를 클릭해서 상세 페이지로 이동
-좌측 메뉴에서 "앱 키" 탭 클릭
-여러 키(네이티브 앱 키, REST API 키, JavaScript 키, Admin 키)가 보이는데, 우리가 쓸 건 "REST API 키" — 이걸 복사
-
-⚠️ 참고: 최근 카카오는 보안 강화를 위해 REST API 키에 "클라이언트 시크릿(client secret)" 기능이 기본 활성화되어 함께 생성됩니다. 하지만 이건 카카오 로그인(사용자 인증) 기능을 쓸 때만 필요하고, 우리가 쓸 Local(장소 검색) API는 REST API 키만 헤더에 넣으면 되고 client secret은 필요 없습니다. 그러니 지금은 무시하고 넘어가도 됩니다.
-
-왼쪽 메뉴의 "플랫폼" 설정은 웹/앱 URL을 등록하는 곳인데, 우리는 서버(터미널)에서만 직접 호출하므로 이 단계는 건너뛰어도 됩니다.
-Local API는 별도 심사나 신청 없이 REST API 키만 있으면 바로 호출 가능합니다.
-
-
-### 6. 테스트 호출 한 번 해보기
-
-키를 발급받자마자 코드를 짜기 전에, 브라우저나 터미널에서 키가 진짜 작동하는지 먼저 확인하는 습관을 들이면 나중에 디버깅 시간이 훨씬 줄어듭니다.
-
-- Kakao 키 테스트 (터미널에 바로 붙여넣기, 본인 키로 교체):
-
-```
-curl -v -G GET "https://dapi.kakao.com/v2/local/search/keyword.json" \
-  --data-urlencode "query=제주 맛집" \
-  -H "Authorization: KakaoAK 여기에_본인_REST_API_키"
-```
-
-→ JSON 형태로 장소 목록이 쭉 뜨면 성공, 401이 뜨면 키를 잘못 복사했거나 앱이 제대로 생성 안 된 것입니다.
-
-- Gemini 키 테스트 (Python으로):
-
-```
-from google import genai
-
-client = genai.Client(api_key="여기에_본인_키")
-response = client.models.generate_content(
-    model="gemini-2.0-flash",
-    contents="안녕? 한 문장으로 인사해줘"
-)
-print(response.text)
-```
-
-→ 정상 응답 텍스트가 뜨면 성공입니다.
-
----
-
-## 4. travel_planner.py 기본 틀 짜기
-
-```
-import argparse
-from datetime import datetime
-
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-def main():
-    # CLI 명령어 설정
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # 날짜 형식 검사
-    if not validate_date(args.date):
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-        return
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print("다음 단계로 진행합니다.")
-
-
-if __name__ == "__main__":
-    main()
-```
-
-- test 결과 :
-  1. 정상 작동
-입력 : 
-```
- python travel_planner.py --date "2026-03-15"
-```
-결과 :
-```
-========================================
-       AI 여행 플래너
-========================================
-여행 날짜: 2026-03-15
-✅ 날짜 형식이 올바릅니다.
-다음 단계로 진행합니다.
-```
-  2. 잘못된 날짜 입력 확인
-입력 1 :
-```
-python travel_planner.py --date "abc"
-```
-입력 2 :
-```
-python travel_planner.py --date "2026/03/15"
-```
-
-결과 :
-```
-❌ 잘못된 날짜 형식입니다.
-예시: 2026-03-15
-```
-
-```
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-0
-========================================
-       AI 여행 플래너
-========================================
-여행 날짜: 2026-03-15
-✅ 날짜 형식이 올바릅니다.
-다음 단계로 진행합니다.
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "abc"
-❌ 잘못된 날짜 형식입니다.
-예시: 2026-03-15
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026/03/15"
-❌ 잘못된 날짜 형식입니다.
-예시: 2026-03-15
-```
-<img width="694" height="282" alt="기본 프로그램 실행 결과 캡쳐" src="https://github.com/user-attachments/assets/85f34eb7-9ab6-439a-9cd7-765f3f8e484b" />
-
-
-## 5. OpenAI API 단독 테스트??? ---> Gemini API 키 발급 받고, pip install google-genai 설치하고 OpenAI용으로 잘못 짜서 5.1에서 Gemini API로 변경 함
-OpenAI() 클라이언트를 만들고 responses.create()로 호출하는 방식으로
-
-1. 기본구조 
-```
-날짜 입력
-   ↓
-CLI
-   ↓
-OpenAI API
-   ↓
-AI 응답
-   ↓
-터미널 출력
-```
-
-### 1. .env 에 키 넣기
-
-```
-OPENAI_API_KEY=여기에_본인의_API_키
-```
-> 주의 ) 실제 API 키는 나에게 보내지 마.
-
-### 2. .gitignore 확인
-그리고 .gitignore 확인 반드시 있어야 할 내용:
-```
-.env
-.venv/
-__pycache__/
-```
-
-### 3. travel_planner.py 다음과 같이 수정
-
-```
-import argparse
-import os
-from datetime import datetime
-
-from dotenv import load_dotenv
-from openai import OpenAI
-
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-def get_travel_recommendation(date):
-    """OpenAI API를 이용해 여행지를 추천받는다."""
-
-    # .env 파일의 환경변수 불러오기
-    load_dotenv()
-
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    # API 키가 없는 경우
-    if not api_key:
-        print("❌ OPENAI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None
-
-    # OpenAI 클라이언트 생성
-    client = OpenAI(api_key=api_key)
-
-    prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 내용을 포함해서 간단하게 설명해주세요.
-
-1. 추천 지역
-2. 추천 이유
-3. 예상되는 여행 분위기
-"""
-
-    try:
-        response = client.responses.create(
-            model="gpt-5.6",
-            input=prompt
-        )
-
-        return response.output_text
-
-    except Exception as e:
-        print("❌ OpenAI API 호출 중 오류가 발생했습니다.")
-        print(f"오류 내용: {e}")
-        return None
-
-
-def main():
-    # CLI 명령어 설정
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # 날짜 형식 검사
-    if not validate_date(args.date):
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-        return
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # OpenAI API 호출
-    print("[1/3] 여행지 추천 생성 중(LLM)...")
-
-    recommendation = get_travel_recommendation(args.date)
-
-    if recommendation is None:
-        return
-
-    print()
-    print("===== AI 여행 추천 결과 =====")
-    print(recommendation)
-
-
-if __name__ == "__main__":
-    main()
-```
-
-> 포인트 1. .env에서 API 키 가져오기
-> .env --> OPENAI_API_KEY --> Python
-
-```
-load_dotenv()
-
-api_key = os.getenv("OPENAI_API_KEY")
-```
-
-> 포인트 2. OpenAI 연결
-```
-client = OpenAI(api_key=api_key)
-```
-여기서 OpenAI API를 사용할 준비를 하는 거야.
-
-
-> 포인트 3. 실제 API 호출 (핵심)
-> Python --> OpenAI API 요청 --> gEMINI --> 응답
- ```
-response = client.responses.create(
-    model="gpt-5.6",
-    input=prompt
-)
-```
-
-> 포인트 4. AI가 보내준 텍스트 꺼내기
-```
-return response.output_text
-```
-그래서 최종적으로:
-```
-recommendation = get_travel_recommendation(args.date)
-```
-에 AI의 답변이 들어가게 돼.
-
-
-## 5.1 Gemini API로 변경 
-
-```
-import argparse
-import os
-from datetime import datetime
-
-from dotenv import load_dotenv
-from google import genai
-
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-def get_travel_recommendation(date):
-    """Gemini API를 이용해 여행지를 추천받는다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Gemini API 키 가져오기
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    # API 키가 없는 경우
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None
-
-    try:
-        # Gemini 클라이언트 생성
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 내용을 포함해서 간단하게 설명해주세요.
-
-1. 추천 지역
-2. 추천 이유
-3. 예상되는 여행 분위기
-"""
-
-        # Gemini API 호출
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt
-        )
-
-        return response.text
-
-    except Exception as e:
-        print("❌ Gemini API 호출 중 오류가 발생했습니다.")
-        print(f"오류 내용: {e}")
-        return None
-
-
-def main():
-    # CLI 명령어 설정
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # 날짜 형식 검사
-    if not validate_date(args.date):
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-        return
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # Gemini API 호출
-    print("[1/3] 여행지 추천 생성 중(Gemini)...")
-
-    recommendation = get_travel_recommendation(args.date)
-
-    if recommendation is None:
-        return
-
-    print()
-    print("===== AI 여행 추천 결과 =====")
-    print(recommendation)
-
-
-if __name__ == "__main__":
-    main()
-
-```
-
-PowerShell 실행 결과
-
-```
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-03-15"
-========================================
-       AI 여행 플래너
-========================================
-여행 날짜: 2026-03-15
-✅ 날짜 형식이 올바릅니다.
-
-[1/3] 여행지 추천 생성 중(Gemini)...
-Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
-
-===== AI 여행 추천 결과 =====
-2026년 3월 15일 봄의 시작을 맞이하여 추천하는 국내 여행지는 **'제주도(특히 서귀포 및 남부 지역)'**입니다.
-
----
-
-### 1. 추천 지역
-* **제주특별자치도 서귀포시 일대** (산방산, 섭지코지, 성산일출봉 주변 등)
-
-### 2. 추천 이유
-* **가장 먼저 만나는 완연한 봄:** 3월 중순은 육지에 비해 기온이 포근하여 봄 기운을 가장 빠르게 체감할 수 있는 시기입니다.
-* **유채꽃의 절정:** 이 시기 서귀포와 동부 일대는 노란 **유채꽃이 만개**하여 섬 전체가 화사하게 물듭니다.
-* **여유로운 여행 가능:** 3월 말부터 시작되는 본격적인 벚꽃 시즌이나 4월 봄방학 전이라, 비교적 덜 붐비고 쾌적하게 여행을 즐길 수 있습니다.
-
-### 3. 예상되는 여행 분위기
-* **화사하고 싱그러운 분위기:** 파란 제주 바다와 대비되는 노란 유채꽃밭을 배경으로 따스한 햇살을 받으며 여행하는 화사한 분위기입니다.
-* **설레고 여유로운 봄 드라이브:** 포근한 해안 바람을 맞으며 해안도로를 드라이브하고, 야외 카페 테라스에서 느긋하게 휴식을 취하는 '설렘 가득한 휴양'의 분위기를 느끼실 수 있습니다.
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> 
-
-```
-
-## 6. Gemini 응답을 JSON으로 구조화 (가장 중요)
-
-### 1. Pydantic 설치
-```
-pip install pydantic
-
-```
-
-### 2. 만들 JSON구조 설명 : Gemini 답변 형태 설정
-
-```
+```json
 {
-    "recommended_city": "제주",
-    "weather": "3월 중순은 비교적 온화한 날씨입니다.",
+    "recommended_city": "추천 지역",
+    "weather": "예상 날씨",
     "events": [
-        "유채꽃 관련 행사",
-        "봄꽃 축제"
+        "행사 또는 축제"
     ],
-    "reason": "봄꽃을 즐기기 좋고 자연 경관이 아름답기 때문입니다."
+    "reason": "추천 이유"
 }
 ```
 
-> 1차 추천 JSON의 핵심 필드인 recommended_city, weather, events, reason을 그대로 형식화 함
+Pydantic의 `TravelRecommendation` 모델을 사용하여 응답 데이터의 구조를 검증합니다.
 
+---
 
-### 3. travel_planner.py 수정
+### ③ JSON 구조화 및 재요청
 
-```
-import argparse
-import os
-from datetime import datetime
+Gemini 응답을 JSON 형식으로 요청하고 Pydantic 모델로 검증합니다.
 
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from pydantic import BaseModel
+JSON 파싱 또는 Gemini 요청에 실패하면 최대 1회 재요청합니다.
 
-
-# ----------------------------------------
-# Gemini가 반환할 JSON 구조
-# ----------------------------------------
-
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-
-# ----------------------------------------
-# 날짜 형식 검사
-# ----------------------------------------
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-# ----------------------------------------
-# Gemini API 호출
-# ----------------------------------------
-
-def get_travel_recommendation(date):
-    """Gemini API를 이용해 여행지 추천을 JSON으로 받는다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Gemini API 키 가져오기
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None
-
-    try:
-        # Gemini 클라이언트 생성
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 정보를 작성해주세요.
-
-- 추천 지역
-- 예상 날씨
-- 해당 날짜에 즐길 수 있는 행사나 축제
-- 추천 이유
-
-반드시 지정된 JSON 구조로 응답하세요.
-"""
-
-        # Gemini에게 구조화된 JSON 요청
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=TravelRecommendation,
-            ),
-        )
-
-        # Gemini의 JSON 응답을 Pydantic 객체로 변환
-        recommendation = TravelRecommendation.model_validate_json(
-            response.text
-        )
-
-        return recommendation
-
-    except Exception as e:
-        print("❌ Gemini API 호출 또는 JSON 처리 중 오류가 발생했습니다.")
-        print(f"오류 내용: {e}")
-        return None
-
-
-# ----------------------------------------
-# 메인 프로그램
-# ----------------------------------------
-
-def main():
-
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # 날짜 검사
-    if not validate_date(args.date):
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-        return
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # Gemini 호출
-    print("[1/3] 1차 추천 생성 중(Gemini)...")
-
-    recommendation = get_travel_recommendation(args.date)
-
-    if recommendation is None:
-        return
-
-    print()
-    print("===== 1차 여행 추천 결과 =====")
-
-    print(f"추천 지역: {recommendation.recommended_city}")
-    print(f"날씨: {recommendation.weather}")
-    print(f"추천 이유: {recommendation.reason}")
-
-    print("행사/축제:")
-    for event in recommendation.events:
-        print(f"  - {event}")
-
-    print()
-    print("===== JSON 데이터 =====")
-    print(recommendation.model_dump_json(indent=4, ensure_ascii=False))
-
-
-if __name__ == "__main__":
-    main()
-
-```
-
-> 포인트 1. 핵심 코드
-```
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-```
-> 포인트 2. jsom 설계도
-
-```
-TravelRecommendation
-        ↓
-┌──────────────────────┐
-│ recommended_city     │ → 문자열
-│ weather              │ → 문자열
-│ events               │ → 문자열 목록
-│ reason               │ → 문자열
-└──────────────────────┘
-```
-
-> 포인트 3. Gemini에게 JSON 구조를 알려주는 부분 (핵심)
-> "아무 말이나 하지 말고 이 구조의 JSON으로 답해." 라는 의미
-```
-config=types.GenerateContentConfig(
-    response_mime_type="application/json",
-    response_schema=TravelRecommendation,
-)
-```
-> 포인트 4. Gemini 응답을 Python 객체로 변환
-```
-recommendation = TravelRecommendation.model_validate_json(
-    response.text
-)
-```
-Gemini가:
-
-{
-    "recommended_city": "제주",
-    "weather": "...",
-    "events": [],
-    "reason": "..."
-}
-
-를 보내면 Python에서:
-```
-recommendation.recommended_city
-```
-로 받고 
-```
-print(recommendation.recommended_city)
-```
-이렇게 사용하면 결과  :   "제주" 로 출력됨
-
-
-실행 결과는 지금  사용자 너무 많아서 못함  0819 1:31
-
-
-## 7. JSON 파싱 실패 처리
-
-### 1. Gemini JSON 파싱 실패 → 최대 1회 재요청, <br> 그래도 실패하면 오류 기록 후 종료 하도록 설계
-
-이유 : LLM은 가끔 JSON 주변에 설명을 붙일 수 있는데 그러면 JSON파싱에 문제 발생 하기 때문에
-```
-try:
-    ...
-except:
-    ...
-``` 
-
-로 처리하고 최대 1회 재요청 하도록 만든다
-
-구조 : 
-```
-JSON 파싱 실패
+```text
+1차 Gemini 요청
       ↓
+JSON 검증
+      ↓
+성공 ─────────→ 다음 단계
+      ↓ 실패
 1회 재요청
       ↓
-성공 → 진행
-실패 → 오류 기록
+성공 ─────────→ 다음 단계
+      ↓ 실패
+오류 기록 후 종료
 ```
 
-### 2. requirements.txt 업데이트
-이번에 pydantic, google-genai를 추가했으니까 터미널에서:
+---
+
+### ④ Kakao Local API 맛집 검색
+
+Gemini가 추천한 지역을 Kakao Local API에 전달하여 맛집을 검색합니다.
+
+검색 결과에서 다음 정보를 사용합니다.
+
+- 맛집 이름
+- 주소
+- 분류
+- URL
+- X 좌표
+- Y 좌표
+
+검색 결과는 최대 5개를 사용합니다.
+
+Kakao API에 문제가 발생하더라도 프로그램 전체를 종료하지 않고 맛집 데이터를 빈 목록으로 처리하여 다음 단계로 진행합니다.
+
+---
+
+### ⑤ 최종 여행 리포트 생성
+
+1차 Gemini 추천 결과와 Kakao 맛집 검색 결과를 다시 Gemini에게 전달합니다.
+
+Gemini는 다음 내용을 포함한 Markdown 여행 리포트를 생성합니다.
+
+- 추천 지역
+- 추천 이유
+- 날씨
+- 행사 및 축제
+- 추천 맛집
+- 1일 여행 일정
+- 오류 및 참고사항
+
+최종 리포트에서는 실제로 전달된 데이터를 기준으로 작성하도록 요청하며, 확인되지 않은 사실을 임의로 만들지 않도록 지시합니다.
+
+---
+
+### ⑥ 결과 파일 저장
+
+실행 결과는 `results` 폴더에 저장됩니다.
+
+```text
+results/
+├── 2026-03-15_travel_data.json
+└── 2026-03-15_travel_plan.md
 ```
+
+#### JSON 파일
+
+`날짜_travel_data.json`
+
+다음 정보를 저장합니다.
+
+- 여행 날짜
+- Gemini 추천 결과
+- Kakao 맛집 결과
+- 오류 정보
+
+#### Markdown 파일
+
+`날짜_travel_plan.md`
+
+사람이 읽을 수 있는 최종 여행 리포트입니다.
+
+---
+
+## 3. 프로그램 구조
+
+```text
+사용자
+  ↓
+argparse
+  ↓
+여행 날짜
+  ↓
+날짜 형식 검사
+  ↓
+Gemini API
+  ↓
+1차 여행 추천 JSON
+  ↓
+Pydantic JSON 검증
+  ↓
+recommended_city
+  ↓
+Kakao Local API
+  ↓
+맛집 검색 결과
+  ↓
+1차 추천 + 맛집 데이터
+  ↓
+Gemini API
+  ↓
+최종 Markdown 리포트
+  ↓
+JSON + Markdown 저장
+```
+
+---
+
+## 4. 개발 환경
+
+- Python 3.10 이상
+- Visual Studio Code
+- Gemini API
+- Kakao Local API
+- Git / GitHub
+
+주요 Python 라이브러리:
+
+- `requests`
+- `python-dotenv`
+- `google-genai`
+- `pydantic`
+
+---
+
+## 5. 설치 방법
+
+### 5-1. 프로젝트 폴더 이동
+
+터미널에서 프로젝트 폴더로 이동합니다.
+
+```powershell
+cd travel_planner
+```
+
+프로젝트 폴더 이름이 다르면 실제 폴더 이름을 사용하세요.
+
+---
+
+### 5-2. 가상환경 생성
+
+```powershell
+python -m venv .venv
+```
+
+---
+
+### 5-3. 가상환경 활성화
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\activate
+```
+
+정상적으로 활성화되면 터미널 앞에 다음과 비슷한 표시가 나타납니다.
+
+```text
+(.venv) PS C:\...\travel_planner>
+```
+
+---
+
+### 5-4. 필요한 라이브러리 설치
+
+```powershell
+pip install requests python-dotenv google-genai pydantic
+```
+
+설치가 완료된 후 현재 환경의 라이브러리 목록을 저장하려면 다음 명령을 사용합니다.
+
+```powershell
 pip freeze > requirements.txt
 ```
-실행해주면 이제 다른 컴퓨터에서 나중에:
-```
-pip install -r requirements.txt
-```
-로 필요한 라이브러리를 한꺼번에 설치할 수 있음.
 
+---
 
-### 3. travel_planner.py 수정
-```
-import argparse
-import json
-import os
-from datetime import datetime
+## 6. API 키 설정
 
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from pydantic import BaseModel
+프로젝트 폴더에 `.env` 파일을 생성합니다.
 
-
-# ----------------------------------------
-# Gemini가 반환할 JSON 구조
-# ----------------------------------------
-
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-
-# ----------------------------------------
-# 날짜 형식 검사
-# ----------------------------------------
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-# ----------------------------------------
-# Gemini API 호출
-# ----------------------------------------
-
-def request_gemini(client, date):
-    """Gemini에게 여행 추천 JSON을 요청한다."""
-
-    prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 정보를 작성해주세요.
-
-- 추천 지역
-- 예상 날씨
-- 해당 날짜에 즐길 수 있는 행사나 축제
-- 추천 이유
-
-반드시 지정된 JSON 구조로 응답하세요.
-"""
-
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=TravelRecommendation,
-        ),
-    )
-
-    return response.text
-
-
-# ----------------------------------------
-# Gemini 여행 추천
-# ----------------------------------------
-
-def get_travel_recommendation(date):
-    """Gemini API 호출 + JSON 파싱 + 1회 재요청"""
-
-    load_dotenv()
-
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None, {
-            "step": "llm_recommendation",
-            "type": "MISSING_API_KEY",
-            "message": "GEMINI_API_KEY가 설정되지 않았습니다."
-        }
-
-    client = genai.Client(api_key=api_key)
-
-    # ----------------------------------------
-    # 최초 요청
-    # ----------------------------------------
-
-    for attempt in range(2):
-
-        try:
-            if attempt == 0:
-                print("[Gemini] 1차 JSON 요청 중...")
-            else:
-                print("[Gemini] JSON 파싱 실패 → 1회 재요청 중...")
-
-            response_text = request_gemini(client, date)
-
-            # JSON 파싱
-            recommendation = TravelRecommendation.model_validate_json(
-                response_text
-            )
-
-            print("✅ JSON 파싱 성공")
-
-            return recommendation, None
-
-        except Exception as e:
-
-            # 첫 번째 실패라면 한 번 더 시도
-            if attempt == 0:
-                print("⚠️ JSON 파싱에 실패했습니다.")
-                print("   1회 재요청합니다.")
-                continue
-
-            # 두 번째도 실패하면 오류 반환
-            print("❌ JSON 파싱 재시도도 실패했습니다.")
-
-            error_info = {
-                "step": "llm_recommendation",
-                "type": "JSON_PARSE_ERROR",
-                "message": str(e)
-            }
-
-            return None, error_info
-
-    return None, {
-        "step": "llm_recommendation",
-        "type": "UNKNOWN_ERROR",
-        "message": "알 수 없는 오류가 발생했습니다."
-    }
-
-
-# ----------------------------------------
-# JSON 결과 저장
-# ----------------------------------------
-
-def save_travel_data(date, recommendation, errors=None):
-    """여행 데이터를 JSON 파일로 저장한다."""
-
-    # results 폴더 생성
-    os.makedirs("results", exist_ok=True)
-
-    filename = f"results/{date}_travel_data.json"
-
-    data = {
-        "date": date,
-        "recommendation": recommendation.model_dump(),
-        "places": [],
-        "errors": errors or []
-    }
-
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=4
-        )
-
-    return filename
-
-
-# ----------------------------------------
-# 메인 프로그램
-# ----------------------------------------
-
-def main():
-
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # ----------------------------------------
-    # 날짜 검사
-    # ----------------------------------------
-
-    if not validate_date(args.date):
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-        return
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # ----------------------------------------
-    # Gemini 1차 추천
-    # ----------------------------------------
-
-    print("[1/3] 1차 추천 생성 중(Gemini)...")
-
-    recommendation, error = get_travel_recommendation(
-        args.date
-    )
-
-    # Gemini 실패
-    if recommendation is None:
-
-        print()
-        print("❌ 1차 여행 추천을 생성하지 못했습니다.")
-
-        # 오류도 JSON으로 저장
-        filename = save_error_data(
-            args.date,
-            error
-        )
-
-        print(f"오류 기록 저장: {filename}")
-
-        return
-
-    # ----------------------------------------
-    # 결과 출력
-    # ----------------------------------------
-
-    print()
-    print("===== 1차 여행 추천 결과 =====")
-
-    print(f"추천 지역: {recommendation.recommended_city}")
-    print(f"날씨: {recommendation.weather}")
-    print(f"추천 이유: {recommendation.reason}")
-
-    print("행사/축제:")
-
-    for event in recommendation.events:
-        print(f"  - {event}")
-
-    # ----------------------------------------
-    # JSON 파일 저장
-    # ----------------------------------------
-
-    filename = save_travel_data(
-        args.date,
-        recommendation
-    )
-
-    print()
-    print("===== 저장 완료 =====")
-    print(f"JSON 파일: {filename}")
-
-
-# ----------------------------------------
-# 오류 데이터 저장
-# ----------------------------------------
-
-def save_error_data(date, error):
-    """API 또는 JSON 파싱 실패 내용을 저장한다."""
-
-    os.makedirs("results", exist_ok=True)
-
-    filename = f"results/{date}_travel_data.json"
-
-    data = {
-        "date": date,
-        "recommendation": None,
-        "places": [],
-        "errors": [error]
-    }
-
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=4
-        )
-
-    return filename
-
-
-if __name__ == "__main__":
-    main()
+```text
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+KAKAO_REST_API_KEY=YOUR_KAKAO_REST_API_KEY
 ```
 
-> 포인트 1. JSON 파싱 실패 시 1회 재요청
-```
-for attempt in range(2):
-```
-이 부분이 최대 2번 요청하게 만드는 부분임
-```
-1차 요청
-   ↓
-JSON 파싱 성공
-   ↓
-   종료
-```
-or
-```
-1차 요청
-   ↓
-JSON 파싱 실패
-   ↓
-재요청 1회
-   ↓
-   ├─ 성공 → 진행
-   │
-   └─ 실패 → 오류 기록
+`YOUR_GEMINI_API_KEY`와 `YOUR_KAKAO_REST_API_KEY` 부분에는 실제 발급받은 API 키를 입력합니다.
+
+### 중요
+
+실제 API 키를 Python 코드에 직접 작성하지 않습니다.
+
+또한 `.env` 파일은 GitHub에 업로드하면 안 됩니다.
+
+---
+
+## 7. `.gitignore` 설정
+
+프로젝트 폴더의 `.gitignore` 파일에는 최소한 다음 내용을 포함합니다.
+
+```text
+.env
+.venv/
+__pycache__/
+*.pyc
 ```
 
-> 포인트 2. travel_data.json 저장 구조
+`.env`에는 API 키가 들어 있으므로 GitHub에 공개되지 않도록 반드시 제외해야 합니다.
 
-최종적으로 얻은 1차 추천 데이터를 results/travel_data.json에 저장
+---
 
-정상적으로 성공하면 프로젝트 폴더에 자동으로:
+## 8. 실행 방법
 
-results 폴더가  생기고 안에 2026-03-15_travel_data.json 파일 생성됨
+가상환경을 활성화한 상태에서 다음 명령을 실행합니다.
 
-파일 내용 : 
-```
-{
-    "date": "2026-03-15",
-    "recommendation": {
-        "recommended_city": "제주",
-        "weather": "따뜻한 봄 날씨",
-        "events": [
-            "유채꽃 축제"
-        ],
-        "reason": "봄꽃을 즐기기 좋기 때문입니다."
-    },
-    "places": [],
-    "errors": []
-}
+```powershell
+python travel_planner.py --date 2026-03-15
 ```
 
-
-## 8. Kakao 맛집 검색 결과가 0개여도 프로그램이 죽지 않는 처리를 추가
-
-### 1. requests 추가 
-```
-pip install requests 
-```
-### 2. .env에 kakao_REST_API 키 추가
-
-### 3. travel_planner.py 수정
-
-```
-import argparse
-import os
-import requests
-
-from datetime import datetime
-
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from pydantic import BaseModel
-
-
-# ----------------------------------------
-# Gemini가 반환할 JSON 구조
-# ----------------------------------------
-
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-
-# ----------------------------------------
-# 날짜 형식 검사
-# ----------------------------------------
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-
-    except ValueError:
-        return False
-
-
-# ----------------------------------------
-# Gemini API 호출
-# ----------------------------------------
-
-def get_travel_recommendation(date):
-    """Gemini API를 이용해 여행지 추천을 JSON으로 받는다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Gemini API 키 가져오기
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None
-
-    try:
-        # Gemini 클라이언트 생성
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 정보를 작성해주세요.
-
-- 추천 지역
-- 예상 날씨
-- 해당 날짜에 즐길 수 있는 행사나 축제
-- 추천 이유
-
-반드시 지정된 JSON 구조로 응답하세요.
-"""
-
-        # Gemini에게 구조화된 JSON 요청
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=TravelRecommendation,
-            ),
-        )
-
-        # Gemini의 JSON 응답을 Pydantic 객체로 변환
-        recommendation = TravelRecommendation.model_validate_json(
-            response.text
-        )
-
-        return recommendation
-
-    except Exception as e:
-        print("❌ Gemini API 호출 또는 JSON 처리 중 오류가 발생했습니다.")
-        print(f"오류 내용: {e}")
-        return None
-
-
-# ----------------------------------------
-# Kakao 맛집 검색
-# ----------------------------------------
-
-def search_restaurants(city):
-    """Kakao Local API로 추천 지역의 맛집을 검색한다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Kakao API 키 가져오기
-    kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
-
-    if not kakao_api_key:
-        print("❌ KAKAO_REST_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        print("  - 다음 단계로 진행합니다.")
-        return []
-
-    # Kakao Local API 주소
-    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
-
-    # 인증 헤더
-    headers = {
-        "Authorization": f"KakaoAK {kakao_api_key}"
-    }
-
-    # 검색 조건
-    params = {
-        "query": f"{city} 맛집",
-        "size": 5
-    }
-
-    try:
-        print()
-        print("[2/3] 맛집 검색 중(Kakao Local)...")
-
-        # Kakao API 요청
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=10
-        )
-
-        # HTTP 오류 확인
-        response.raise_for_status()
-
-        # JSON 응답으로 변환
-        data = response.json()
-
-        # 검색 결과 가져오기
-        documents = data.get("documents", [])
-
-        # ----------------------------------------
-        # 검색 결과가 0개인 경우
-        # ----------------------------------------
-
-        if not documents:
-            print("  - 검색 결과 0건")
-            print("  - 다음 단계로 진행합니다.")
-
-            return []
-
-        # ----------------------------------------
-        # 검색 결과가 있는 경우
-        # ----------------------------------------
-
-        restaurants = []
-
-        for item in documents:
-
-            restaurant = {
-                "name": item.get("place_name", ""),
-                "address": (
-                    item.get("road_address_name")
-                    or item.get("address_name", "")
-                ),
-                "category": item.get("category_name", ""),
-                "url": item.get("place_url", ""),
-                "x": item.get("x", ""),
-                "y": item.get("y", "")
-            }
-
-            restaurants.append(restaurant)
-
-        print(f"  - 맛집 {len(restaurants)}곳 검색 완료")
-
-        return restaurants
-
-    # ----------------------------------------
-    # Kakao API 오류
-    # ----------------------------------------
-
-    except requests.RequestException as e:
-
-        print("  - Kakao API 요청 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 다음 단계로 진행합니다.")
-
-        return []
-
-    except Exception as e:
-
-        print("  - 맛집 검색 처리 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 다음 단계로 진행합니다.")
-
-        return []
-
-
-# ----------------------------------------
-# 메인 프로그램
-# ----------------------------------------
-
-def main():
-
-    # CLI 설정
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # ----------------------------------------
-    # 날짜 검사
-    # ----------------------------------------
-
-    if not validate_date(args.date):
-
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-
-        return
-
-    # ----------------------------------------
-    # 프로그램 시작 화면
-    # ----------------------------------------
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # ----------------------------------------
-    # STEP 1
-    # Gemini 여행지 추천
-    # ----------------------------------------
-
-    print("[1/3] 1차 추천 생성 중(Gemini)...")
-
-    recommendation = get_travel_recommendation(args.date)
-
-    # Gemini 실패
-    if recommendation is None:
-        return
-
-    # ----------------------------------------
-    # Gemini 결과 출력
-    # ----------------------------------------
-
-    print()
-    print("===== 1차 여행 추천 결과 =====")
-
-    print(
-        f"추천 지역: "
-        f"{recommendation.recommended_city}"
-    )
-
-    print(
-        f"날씨: "
-        f"{recommendation.weather}"
-    )
-
-    print(
-        f"추천 이유: "
-        f"{recommendation.reason}"
-    )
-
-    print("행사/축제:")
-
-    for event in recommendation.events:
-        print(f"  - {event}")
-
-    # ----------------------------------------
-    # JSON 데이터 출력
-    # ----------------------------------------
-
-    print()
-    print("===== JSON 데이터 =====")
-
-    print(
-        recommendation.model_dump_json(
-            indent=4,
-            ensure_ascii=False
-        )
-    )
-
-    # ----------------------------------------
-    # STEP 2
-    # Gemini의 recommended_city를
-    # Kakao API의 검색 지역으로 사용
-    # ----------------------------------------
-
-    city = recommendation.recommended_city
-
-    restaurants = search_restaurants(city)
-
-    # ----------------------------------------
-    # Kakao 검색 결과 출력
-    # ----------------------------------------
-
-    print()
-    print("===== 맛집 검색 결과 =====")
-
-    if not restaurants:
-
-        print("검색된 맛집이 없습니다.")
-        print("맛집 데이터 없이 다음 단계로 진행합니다.")
-
-    else:
-
-        for index, restaurant in enumerate(
-            restaurants,
-            start=1
-        ):
-
-            print(
-                f"{index}. "
-                f"{restaurant['name']}"
-            )
-
-            print(
-                f"   주소: "
-                f"{restaurant['address']}"
-            )
-
-            print(
-                f"   분류: "
-                f"{restaurant['category']}"
-            )
-
-            print(
-                f"   URL: "
-                f"{restaurant['url']}"
-            )
-
-            print()
-
-    # ----------------------------------------
-    # STEP 3는 다음 단계에서 추가
-    # ----------------------------------------
-
-    print()
-    print("[3/3] 최종 리포트 생성 단계는 다음 STEP에서 추가합니다.")
-
-    print()
-    print("=" * 40)
-    print("현재 STEP 12까지 완료")
-    print("=" * 40)
-
-
-# ----------------------------------------
-# 프로그램 실행
-# ----------------------------------------
-
-if __name__ == "__main__":
-    main()
-
-```
-> 포인트 1. import os 밑에 import requests 추가 <br>
-> kakao API에 인터넷 요청 보내기 위해 필요
-
-> 포인트 2. search_restaurants() 함수 추가
-
-Gemini가 알려준:
-```
-recommendation.recommended_city
-```
-를 받아서 :
-```
-city = recommendation.recommended_city
-
-restaurants = search_restaurants(city)
-```
-로 kakao에 전달
-
-" Gemini --> recommended_city --> Kakao Local API --> ○○ 지역 맛집 "
-
-> 포인트 3. 검색 결과가 없으면 [] 반환
-```
-if not documents:
-    print("  - 검색 결과 0건")
-    print("  - 다음 단계로 진행합니다.")
-    return []
+정상 실행 시 다음 3단계가 진행됩니다.
+
+```text
+[1/3] Gemini 여행지 추천
+[2/3] Kakao 맛집 검색
+[3/3] 최종 여행 리포트
 ```
 
-API 자체에 문제가 생겨도 : 
-```
-except requests.RequestException:
-    return []
-```
-처리 하므로 맛집 API가 실패해도 프로그램 전체가 죽지 않음
+실행이 완료되면 다음과 같은 결과 파일이 생성됩니다.
 
-
-> 포인트 4. 실행결과
-```
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date "2026-03-15"
-========================================
-       AI 여행 플래너
-========================================
-여행 날짜: 2026-03-15
-✅ 날짜 형식이 올바릅니다.
-
-[1/3] 1차 추천 생성 중(Gemini)...
-Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
-
-===== 1차 여행 추천 결과 =====
-추천 지역: 전라남도 광양시
-날씨: 최저 2℃, 최고 14℃ 안팎으로 포근하며 야외 활동하기 좋은 맑은 봄날씨가 예상됩니다.
-추천 이유: 3월 중순은 봄의 전령사인 매화가 만개하는 시기로, 섬진강변을 따라 하얗게 물든 매화마을의 장관을 감상하며 완연한 봄 기운을 느끼기에 최적의 여행지입니다.
-행사/축제:
-  - 광양매화축제
-  - 섬진강 매화마을 봄꽃 산책
-
-===== JSON 데이터 =====
-{
-    "recommended_city": "전라남도 광양시",
-    "weather": "최저 2℃, 최고 14℃ 안팎으로 포근하며 야외 활동하기 좋은 맑은 봄날씨가 예상됩니다.",
-    "events": [
-        "광양매화축제",
-        "섬진강 매화마을 봄꽃 산책"
-    ],
-    "reason": "3월 중순은 봄의 전령사인 매화가 만개하는 시기로, 섬진강변을 따라 하얗게 물든 매화마을의 장관을 감상하며 완연한 봄 기운을 느끼기에 최적의 여행지입니다."
-}
-
-[2/3] 맛집 검색 중(Kakao Local)...
-  - Kakao API 요청 중 오류가 발생했습니다.
-  - 오류 내용: 403 Client Error: Forbidden for url: https://dapi.kakao.com/v2/local/search/keyword.json?query=%EC%A0%84%EB%9D%BC%EB%82%A8%EB%8F%84+%EA%B4%91%EC%96%91%EC%8B%9C+%EB%A7%9B%EC%A7%91&size=5
-  - 다음 단계로 진행합니다.
-
-===== 맛집 검색 결과 =====
-검색된 맛집이 없습니다.
-맛집 데이터 없이 다음 단계로 진행합니다.
-
-[3/3] 최종 리포트 생성 단계는 다음 STEP에서 추가합니다.
-
-========================================
-현재 STEP 12까지 완료
-========================================
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> 
-```
-
-
-## 8-1 통합 travel_planner.py (7과 8을 통합 수정본)
-```
-import argparse
-import os
-import requests
-
-from datetime import datetime
-
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from pydantic import BaseModel
-
-
-# ----------------------------------------
-# Gemini가 반환할 JSON 구조
-# ----------------------------------------
-
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-
-# ----------------------------------------
-# 날짜 형식 검사
-# ----------------------------------------
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-
-    except ValueError:
-        return False
-
-
-# ----------------------------------------
-# Gemini API 호출
-# ----------------------------------------
-
-def get_travel_recommendation(date):
-    """Gemini API를 이용해 여행지 추천을 JSON으로 받는다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Gemini API 키 가져오기
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        return None
-
-    try:
-        # Gemini 클라이언트 생성
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 정보를 작성해주세요.
-
-- 추천 지역
-- 예상 날씨
-- 해당 날짜에 즐길 수 있는 행사나 축제
-- 추천 이유
-
-반드시 지정된 JSON 구조로 응답하세요.
-"""
-
-        # Gemini에게 구조화된 JSON 요청
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=TravelRecommendation,
-            ),
-        )
-
-        # Gemini의 JSON 응답을 Pydantic 객체로 변환
-        recommendation = TravelRecommendation.model_validate_json(
-            response.text
-        )
-
-        return recommendation
-
-    except Exception as e:
-        print("❌ Gemini API 호출 또는 JSON 처리 중 오류가 발생했습니다.")
-        print(f"오류 내용: {e}")
-        return None
-
-
-# ----------------------------------------
-# Kakao 맛집 검색
-# ----------------------------------------
-
-def search_restaurants(city):
-    """Kakao Local API로 추천 지역의 맛집을 검색한다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Kakao API 키 가져오기
-    kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
-
-    if not kakao_api_key:
-        print("❌ KAKAO_REST_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        print("  - 다음 단계로 진행합니다.")
-        return []
-
-    # Kakao Local API 주소
-    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
-
-    # 인증 헤더
-    headers = {
-        "Authorization": f"KakaoAK {kakao_api_key}"
-    }
-
-    # 검색 조건
-    params = {
-        "query": f"{city} 맛집",
-        "size": 5
-    }
-
-    try:
-        print()
-        print("[2/3] 맛집 검색 중(Kakao Local)...")
-
-        # Kakao API 요청
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=10
-        )
-
-        # HTTP 오류 확인
-        response.raise_for_status()
-
-        # JSON 응답으로 변환
-        data = response.json()
-
-        # 검색 결과 가져오기
-        documents = data.get("documents", [])
-
-        # ----------------------------------------
-        # 검색 결과가 0개인 경우
-        # ----------------------------------------
-
-        if not documents:
-            print("  - 검색 결과 0건")
-            print("  - 다음 단계로 진행합니다.")
-
-            return []
-
-        # ----------------------------------------
-        # 검색 결과가 있는 경우
-        # ----------------------------------------
-
-        restaurants = []
-
-        for item in documents:
-
-            restaurant = {
-                "name": item.get("place_name", ""),
-                "address": (
-                    item.get("road_address_name")
-                    or item.get("address_name", "")
-                ),
-                "category": item.get("category_name", ""),
-                "url": item.get("place_url", ""),
-                "x": item.get("x", ""),
-                "y": item.get("y", "")
-            }
-
-            restaurants.append(restaurant)
-
-        print(f"  - 맛집 {len(restaurants)}곳 검색 완료")
-
-        return restaurants
-
-    # ----------------------------------------
-    # Kakao API 오류
-    # ----------------------------------------
-
-    except requests.RequestException as e:
-
-        print("  - Kakao API 요청 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 다음 단계로 진행합니다.")
-
-        return []
-
-    except Exception as e:
-
-        print("  - 맛집 검색 처리 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 다음 단계로 진행합니다.")
-
-        return []
-
-
-# ----------------------------------------
-# 메인 프로그램
-# ----------------------------------------
-
-def main():
-
-    # CLI 설정
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요."
-    )
-
-    args = parser.parse_args()
-
-    # ----------------------------------------
-    # 날짜 검사
-    # ----------------------------------------
-
-    if not validate_date(args.date):
-
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-
-        return
-
-    # ----------------------------------------
-    # 프로그램 시작 화면
-    # ----------------------------------------
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-
-    print(f"여행 날짜: {args.date}")
-    print("✅ 날짜 형식이 올바릅니다.")
-    print()
-
-    # ----------------------------------------
-    # STEP 1
-    # Gemini 여행지 추천
-    # ----------------------------------------
-
-    print("[1/3] 1차 추천 생성 중(Gemini)...")
-
-    recommendation = get_travel_recommendation(args.date)
-
-    # Gemini 실패
-    if recommendation is None:
-        return
-
-    # ----------------------------------------
-    # Gemini 결과 출력
-    # ----------------------------------------
-
-    print()
-    print("===== 1차 여행 추천 결과 =====")
-
-    print(
-        f"추천 지역: "
-        f"{recommendation.recommended_city}"
-    )
-
-    print(
-        f"날씨: "
-        f"{recommendation.weather}"
-    )
-
-    print(
-        f"추천 이유: "
-        f"{recommendation.reason}"
-    )
-
-    print("행사/축제:")
-
-    for event in recommendation.events:
-        print(f"  - {event}")
-
-    # ----------------------------------------
-    # JSON 데이터 출력
-    # ----------------------------------------
-
-    print()
-    print("===== JSON 데이터 =====")
-
-    print(
-        recommendation.model_dump_json(
-            indent=4,
-            ensure_ascii=False
-        )
-    )
-
-    # ----------------------------------------
-    # STEP 2
-    # Gemini의 recommended_city를
-    # Kakao API의 검색 지역으로 사용
-    # ----------------------------------------
-
-    city = recommendation.recommended_city
-
-    restaurants = search_restaurants(city)
-
-    # ----------------------------------------
-    # Kakao 검색 결과 출력
-    # ----------------------------------------
-
-    print()
-    print("===== 맛집 검색 결과 =====")
-
-    if not restaurants:
-
-        print("검색된 맛집이 없습니다.")
-        print("맛집 데이터 없이 다음 단계로 진행합니다.")
-
-    else:
-
-        for index, restaurant in enumerate(
-            restaurants,
-            start=1
-        ):
-
-            print(
-                f"{index}. "
-                f"{restaurant['name']}"
-            )
-
-            print(
-                f"   주소: "
-                f"{restaurant['address']}"
-            )
-
-            print(
-                f"   분류: "
-                f"{restaurant['category']}"
-            )
-
-            print(
-                f"   URL: "
-                f"{restaurant['url']}"
-            )
-
-            print()
-
-    # ----------------------------------------
-    # STEP 3는 다음 단계에서 추가
-    # ----------------------------------------
-
-    print()
-    print("[3/3] 최종 리포트 생성 단계는 다음 STEP에서 추가합니다.")
-
-    print()
-    print("=" * 40)
-    print("현재 STEP 12까지 완료")
-    print("=" * 40)
-
-
-# ----------------------------------------
-# 프로그램 실행
-# ----------------------------------------
-
-if __name__ == "__main__":
-    main()
-    
-```
-
-
-
-## 9. Gemini 추천 결과 + Kakao 맛집 결과 → 다시 Gemini → 최종 여행 리포트 → JSON/Markdown 저장
-
-미션의 전체 흐름 : 추천 JSON → 맛집 검색 → 두 결과를 다시 LLM에 전달 → 최종 리포트 → JSON/Markdown 저장
-
-### 1. travel_planner.py 수정
-```
-import argparse
-import json
-import os
-import requests
-
-from datetime import datetime
-
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from pydantic import BaseModel
-
-
-# ----------------------------------------
-# Gemini가 반환할 JSON 구조
-# ----------------------------------------
-
-class TravelRecommendation(BaseModel):
-    recommended_city: str
-    weather: str
-    events: list[str]
-    reason: str
-
-
-# ----------------------------------------
-# 날짜 형식 검사
-# ----------------------------------------
-
-def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-
-    try:
-        datetime.strptime(date_string, "%Y-%m-%d")
-        return True
-
-    except ValueError:
-        return False
-
-
-# ----------------------------------------
-# Gemini API 호출
-# ----------------------------------------
-
-def request_gemini(client, date):
-    """Gemini에게 여행 추천 JSON을 요청한다."""
-
-    prompt = f"""
-{date}에 국내 여행을 간다고 가정하고,
-여행하기 좋은 지역 하나를 추천해주세요.
-
-다음 정보를 작성해주세요.
-
-- 추천 지역
-- 예상 날씨
-- 해당 날짜에 즐길 수 있는 행사나 축제
-- 추천 이유
-
-반드시 지정된 JSON 구조로 응답하세요.
-"""
-
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=TravelRecommendation,
-        ),
-    )
-
-    return response.text
-
-
-# ----------------------------------------
-# Gemini 여행 추천
-# ----------------------------------------
-
-def get_travel_recommendation(date):
-    """
-    Gemini API 호출
-    + JSON 파싱
-    + JSON 파싱 실패 시 1회 재요청
-    """
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Gemini API 키 가져오기
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-
-        return None, {
-            "step": "llm_recommendation",
-            "type": "MISSING_API_KEY",
-            "message": "GEMINI_API_KEY가 설정되지 않았습니다."
-        }
-
-    try:
-        # Gemini 클라이언트 생성
-        client = genai.Client(api_key=api_key)
-
-    except Exception as e:
-
-        print("❌ Gemini 클라이언트 생성에 실패했습니다.")
-        print(f"오류 내용: {e}")
-
-        return None, {
-            "step": "llm_recommendation",
-            "type": "CLIENT_ERROR",
-            "message": str(e)
-        }
-
-    # ----------------------------------------
-    # 최대 2회 요청
-    # ----------------------------------------
-
-    for attempt in range(2):
-
-        try:
-
-            if attempt == 0:
-                print("[Gemini] 1차 JSON 요청 중...")
-
-            else:
-                print("[Gemini] JSON 파싱 실패 → 1회 재요청 중...")
-
-            # Gemini API 호출
-            response_text = request_gemini(
-                client,
-                date
-            )
-
-            # JSON 파싱 및 Pydantic 검증
-            recommendation = TravelRecommendation.model_validate_json(
-                response_text
-            )
-
-            print("✅ JSON 파싱 성공")
-
-            return recommendation, None
-
-        except Exception as e:
-
-            # ----------------------------------------
-            # 1차 실패 → 재요청
-            # ----------------------------------------
-
-            if attempt == 0:
-
-                print("⚠️ JSON 파싱 또는 Gemini 요청에 실패했습니다.")
-                print("   1회 재요청합니다.")
-
-                continue
-
-            # ----------------------------------------
-            # 2차 실패 → 오류 반환
-            # ----------------------------------------
-
-            print("❌ JSON 파싱 재시도도 실패했습니다.")
-
-            error_info = {
-                "step": "llm_recommendation",
-                "type": "JSON_PARSE_ERROR",
-                "message": str(e)
-            }
-
-            return None, error_info
-
-    return None, {
-        "step": "llm_recommendation",
-        "type": "UNKNOWN_ERROR",
-        "message": "알 수 없는 오류가 발생했습니다."
-    }
-
-
-# ----------------------------------------
-# Kakao 맛집 검색
-# ----------------------------------------
-
-def search_restaurants(city):
-    """Kakao Local API로 추천 지역의 맛집을 검색한다."""
-
-    # .env 파일 불러오기
-    load_dotenv()
-
-    # Kakao API 키 가져오기
-    kakao_api_key = os.getenv(
-        "KAKAO_REST_API_KEY"
-    )
-
-    # ----------------------------------------
-    # API 키가 없는 경우
-    # ----------------------------------------
-
-    if not kakao_api_key:
-
-        print("❌ KAKAO_REST_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
-        print("  - 맛집 검색 없이 다음 단계로 진행합니다.")
-
-        return [], {
-            "step": "kakao_restaurant_search",
-            "type": "MISSING_API_KEY",
-            "message": "KAKAO_REST_API_KEY가 설정되지 않았습니다."
-        }
-
-    # ----------------------------------------
-    # Kakao Local API 주소
-    # ----------------------------------------
-
-    url = (
-        "https://dapi.kakao.com/"
-        "v2/local/search/keyword.json"
-    )
-
-    # ----------------------------------------
-    # 인증 헤더
-    # ----------------------------------------
-
-    headers = {
-        "Authorization": f"KakaoAK {kakao_api_key}"
-    }
-
-    # ----------------------------------------
-    # 검색 조건
-    # ----------------------------------------
-
-    params = {
-        "query": f"{city} 맛집",
-        "size": 5
-    }
-
-    try:
-
-        print()
-        print("[2/3] 맛집 검색 중(Kakao Local)...")
-
-        # ----------------------------------------
-        # Kakao API 요청
-        # ----------------------------------------
-
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=10
-        )
-
-        # HTTP 오류 확인
-        response.raise_for_status()
-
-        # JSON 응답으로 변환
-        data = response.json()
-
-        # 검색 결과 가져오기
-        documents = data.get(
-            "documents",
-            []
-        )
-
-        # ----------------------------------------
-        # 검색 결과가 없는 경우
-        # ----------------------------------------
-
-        if not documents:
-
-            print("  - 검색 결과 0건")
-            print("  - 다음 단계로 진행합니다.")
-
-            return [], None
-
-        # ----------------------------------------
-        # 검색 결과가 있는 경우
-        # ----------------------------------------
-
-        restaurants = []
-
-        for item in documents:
-
-            restaurant = {
-                "name": item.get(
-                    "place_name",
-                    ""
-                ),
-
-                "address": (
-                    item.get("road_address_name")
-                    or item.get("address_name", "")
-                ),
-
-                "category": item.get(
-                    "category_name",
-                    ""
-                ),
-
-                "url": item.get(
-                    "place_url",
-                    ""
-                ),
-
-                "x": item.get(
-                    "x",
-                    ""
-                ),
-
-                "y": item.get(
-                    "y",
-                    ""
-                )
-            }
-
-            restaurants.append(
-                restaurant
-            )
-
-        print(
-            f"  - 맛집 {len(restaurants)}곳 검색 완료"
-        )
-
-        return restaurants, None
-
-    # ----------------------------------------
-    # Kakao API 요청 오류
-    # ----------------------------------------
-
-    except requests.RequestException as e:
-
-        print("  - Kakao API 요청 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 맛집 데이터 없이 다음 단계로 진행합니다.")
-
-        return [], {
-            "step": "kakao_restaurant_search",
-            "type": "REQUEST_ERROR",
-            "message": str(e)
-        }
-
-    # ----------------------------------------
-    # 기타 오류
-    # ----------------------------------------
-
-    except Exception as e:
-
-        print("  - 맛집 검색 처리 중 오류가 발생했습니다.")
-        print(f"  - 오류 내용: {e}")
-        print("  - 다음 단계로 진행합니다.")
-
-        return [], {
-            "step": "kakao_restaurant_search",
-            "type": "PROCESSING_ERROR",
-            "message": str(e)
-        }
-
-
-# ----------------------------------------
-# 여행 데이터 JSON 저장
-# ----------------------------------------
-
-def save_travel_data(
-    date,
-    recommendation,
-    restaurants,
-    errors=None
-):
-    """
-    Gemini 추천 결과와
-    Kakao 맛집 검색 결과를
-    하나의 JSON 파일로 저장한다.
-    """
-
-    # results 폴더 생성
-    os.makedirs(
-        "results",
-        exist_ok=True
-    )
-
-    # 파일 이름
-    filename = (
-        f"results/"
-        f"{date}_travel_data.json"
-    )
-
-    # 저장할 데이터
-    data = {
-        "date": date,
-
-        "recommendation": (
-            recommendation.model_dump()
-            if recommendation
-            else None
-        ),
-
-        "places": restaurants,
-
-        "errors": errors or []
-    }
-
-    # JSON 파일 저장
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=4
-        )
-
-    return filename
-
-
-# ----------------------------------------
-# 오류 데이터 저장
-# ----------------------------------------
-
-def save_error_data(
-    date,
-    error
-):
-    """Gemini 실패 내용을 JSON 파일로 저장한다."""
-
-    # results 폴더 생성
-    os.makedirs(
-        "results",
-        exist_ok=True
-    )
-
-    filename = (
-        f"results/"
-        f"{date}_travel_data.json"
-    )
-
-    data = {
-        "date": date,
-
-        "recommendation": None,
-
-        "places": [],
-
-        "errors": [
-            error
-        ]
-    }
-
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=4
-        )
-
-    return filename
-
-
-# ----------------------------------------
-# 메인 프로그램
-# ----------------------------------------
-
-def main():
-
-    # ----------------------------------------
-    # CLI 설정
-    # ----------------------------------------
-
-    parser = argparse.ArgumentParser(
-        description="AI 여행 플래너"
-    )
-
-    parser.add_argument(
-        "--date",
-        required=True,
-        help=(
-            "여행 날짜를 "
-            "YYYY-MM-DD 형식으로 입력하세요."
-        )
-    )
-
-    args = parser.parse_args()
-
-    # ----------------------------------------
-    # 날짜 검사
-    # ----------------------------------------
-
-    if not validate_date(
-        args.date
-    ):
-
-        print("❌ 잘못된 날짜 형식입니다.")
-        print("예시: 2026-03-15")
-
-        return
-
-    # ----------------------------------------
-    # 프로그램 시작 화면
-    # ----------------------------------------
-
-    print("=" * 40)
-    print("       AI 여행 플래너")
-    print("=" * 40)
-
-    print(
-        f"여행 날짜: {args.date}"
-    )
-
-    print(
-        "✅ 날짜 형식이 올바릅니다."
-    )
-
-    print()
-
-    # ----------------------------------------
-    # STEP 1
-    # Gemini 여행지 추천
-    # ----------------------------------------
-
-    print(
-        "[1/3] 1차 추천 생성 중(Gemini)..."
-    )
-
-    recommendation, gemini_error = (
-        get_travel_recommendation(
-            args.date
-        )
-    )
-
-    # ----------------------------------------
-    # Gemini 실패
-    # ----------------------------------------
-
-    if recommendation is None:
-
-        print()
-        print(
-            "❌ 1차 여행 추천을 "
-            "생성하지 못했습니다."
-        )
-
-        # 오류 JSON 저장
-        filename = save_error_data(
-            args.date,
-            gemini_error
-        )
-
-        print(
-            f"오류 기록 저장: {filename}"
-        )
-
-        return
-
-    # ----------------------------------------
-    # Gemini 결과 출력
-    # ----------------------------------------
-
-    print()
-    print(
-        "===== 1차 여행 추천 결과 ====="
-    )
-
-    print(
-        f"추천 지역: "
-        f"{recommendation.recommended_city}"
-    )
-
-    print(
-        f"날씨: "
-        f"{recommendation.weather}"
-    )
-
-    print(
-        f"추천 이유: "
-        f"{recommendation.reason}"
-    )
-
-    print("행사/축제:")
-
-    for event in recommendation.events:
-
-        print(
-            f"  - {event}"
-        )
-
-    # ----------------------------------------
-    # Gemini JSON 데이터 출력
-    # ----------------------------------------
-
-    print()
-    print(
-        "===== Gemini JSON 데이터 ====="
-    )
-
-    print(
-        recommendation.model_dump_json(
-            indent=4,
-            ensure_ascii=False
-        )
-    )
-
-    # ----------------------------------------
-    # STEP 2
-    # Kakao 맛집 검색
-    # ----------------------------------------
-
-    city = recommendation.recommended_city
-
-    restaurants, kakao_error = (
-        search_restaurants(city)
-    )
-
-    # ----------------------------------------
-    # Kakao 검색 결과 출력
-    # ----------------------------------------
-
-    print()
-    print(
-        "===== 맛집 검색 결과 ====="
-    )
-
-    if not restaurants:
-
-        print(
-            "검색된 맛집이 없습니다."
-        )
-
-        print(
-            "맛집 데이터 없이 "
-            "다음 단계로 진행합니다."
-        )
-
-    else:
-
-        for index, restaurant in enumerate(
-            restaurants,
-            start=1
-        ):
-
-            print(
-                f"{index}. "
-                f"{restaurant['name']}"
-            )
-
-            print(
-                f"   주소: "
-                f"{restaurant['address']}"
-            )
-
-            print(
-                f"   분류: "
-                f"{restaurant['category']}"
-            )
-
-            print(
-                f"   URL: "
-                f"{restaurant['url']}"
-            )
-
-            print()
-
-    # ----------------------------------------
-    # 오류 목록 만들기
-    # ----------------------------------------
-
-    errors = []
-
-    if kakao_error:
-        errors.append(
-            kakao_error
-        )
-
-    # ----------------------------------------
-    # 여행 데이터 JSON 저장
-    # ----------------------------------------
-
-    filename = save_travel_data(
-        date=args.date,
-        recommendation=recommendation,
-        restaurants=restaurants,
-        errors=errors
-    )
-
-    print()
-    print(
-        "===== 여행 데이터 저장 완료 ====="
-    )
-
-    print(
-        f"JSON 파일: {filename}"
-    )
-
-    # ----------------------------------------
-    # 저장 내용 요약
-    # ----------------------------------------
-
-    print()
-    print(
-        "===== 현재 진행 상태 ====="
-    )
-
-    print("✅ STEP 1 : Gemini 여행지 추천")
-    print("✅ JSON 구조화")
-    print("✅ JSON 파싱 실패 시 1회 재요청")
-    print("✅ STEP 2 : Kakao 맛집 검색")
-    print("✅ 여행 데이터 JSON 저장")
-    print()
-    print(
-        "[3/3] 최종 리포트 생성 단계는 "
-        "다음 STEP에서 추가합니다."
-    )
-
-    print()
-    print("=" * 40)
-    print("현재 STEP 12까지 완료")
-    print("=" * 40)
-
-
-# ----------------------------------------
-# 프로그램 실행
-# ----------------------------------------
-
-if __name__ == "__main__":
-    main()
-
-```
-> 포인트 1. 두 API 결과를 합침
-```
-Gemini 추천 결과
-       +
-Kakao 맛집 결과
-       ↓
-   다시 Gemini
-       ↓
-최종 여행 리포트
-```
-> 포인트 2. Markdown 리포트 생성
-
-Gemini에게 다음 형식을 요구 : 
-```
-# 국내 여행 추천 리포트
-
-## 1. 추천 지역
-
-## 2. 추천 이유
-
-## 3. 날씨
-
-## 4. 행사 및 축제
-
-## 5. 추천 맛집
-
-## 6. 추천 여행 일정
-
-## 7. 오류 및 참고사항
-```
-
-> 포인트 3. 파일 2개 생성
-
-실행이 성공하면 results 폴더에 :
-```
+```text
 results/
-│
-├─ 2026-03-15_travel_data.json
-│
-└─ 2026-03-15_travel_plan.md
+├── 2026-03-15_travel_data.json
+└── 2026-03-15_travel_plan.md
 ```
-JSON과 Markdown 두 파일 저장됨
 
-> 실행 결과 : 
-```
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> python travel_planner.py --date 2026-03-15
+---
+
+## 9. 진행 로그
+
+프로그램은 각 단계의 진행 상황을 화면에 표시합니다.
+
+예:
+
+```text
 ========================================
        AI 여행 플래너
 ========================================
 여행 날짜: 2026-03-15
 ✅ 날짜 형식이 올바릅니다.
 
-[1/3] 1차 추천 생성 중(Gemini)...
-[Gemini] 1차 JSON 요청 중...
-Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
-✅ JSON 파싱 성공
+[1/3] Gemini 여행지 추천
+  - API 호출 중...
+  - 1차 JSON 요청 중...
+  - JSON 응답 검증 중...
+  - ✅ JSON 파싱 및 검증 성공
+  - 추천 지역: 전주
 
-===== 1차 여행 추천 결과 =====
-추천 지역: 광양시
-날씨: 맑고 포근한 봄날씨 (최저 3℃ / 최고 14℃ 예상)
-추천 이유: 3월 중순은 섬진강변을 따라 매화가 만개하는 시기로, 아름다운 흰빛 매화 군락과 함께 봄의 시작을 느끼기에 가장 완벽한 여행지입니다.
-행사/축제:
-  - 광양 매화축제
-  - 섬진강변 매화마을 산책
+[2/3] Kakao 맛집 검색
+  - 검색 지역: 전주
+  - API 호출 중...
+  - ✅ 맛집 5곳 검색 완료
 
-[2/3] 맛집 검색 중(Kakao Local)...
-  - Kakao API 요청 중 오류가 발생했습니다.
-  - 오류 내용: 403 Client Error: Forbidden for url: https://dapi.kakao.com/v2/local/search/keyword.json?query=%EA%B4%91%EC%96%91%EC%8B%9C+%EB%A7%9B%EC%A7%91&size=5
-  - 맛집 데이터 없이 다음 단계로 진행합니다.
-
-===== 맛집 검색 결과 =====
-검색된 맛집이 없습니다.
-맛집 데이터 없이 다음 단계로 진행합니다.
-
-[3/3] 최종 리포트 생성 중(Gemini)...
-  - 최종 리포트 생성 완료
-
-===== 최종 여행 리포트 =====
-# 국내 여행 추천 리포트
-
-## 1. 추천 지역
-- **지역:** 광양시
-- **여행 날짜:** 2026년 3월 15일
-
-## 2. 추천 이유
-3월 중순은 섬진강변을 따라 매화가 만개하는 시기로, 아름다운 흰빛 매화 군락과 함께 봄의 시작을 느끼기에 가장 완벽한 여행지입니다.
-
-## 3. 날씨
-- **예상 날씨:** 맑고 포근한 봄날씨
-- **기온:** 최저 3℃ / 최고 14℃ 예상
-
-## 4. 행사 및 축제
-- 광양 매화축제
-- 섬진강변 매화마을 산책
-
-## 5. 추천 맛집
-- 검색된 맛집 정보가 없습니다. (API 호출 오류로 인해 정보를 제공할 수 없습니다.)
-
-## 6. 추천 여행 일정
-- **오전:** 광양 도착 후 섬진강변 매화마을 산책
-- **오후:** 광양 매화축제 참여 및 매화 군락지 감상
-- **저녁:** 일정 마무리 및 귀가
-
-## 7. 오류 및 참고사항
-맛집 검색 과정에서 다음과 같은 API 오류가 발생하여 맛집 정보를 불러오지 못했습니다.
-
-- **단계:** `kakao_restaurant_search`
-- **오류 유형:** `REQUEST_ERROR`
-- **오류 메시지:** `403 Client Error: Forbidden for url: https://dapi.kakao.com/v2/local/search/keyword.json?query=%EA%B4%91%EC%96%91%EC%8B%9C+%EB%A7%9B%EC%A7%91&size=5`
-- **설명:** 카카오 로컬 API 요청 중 권한 오류(403 Forbidden)가 발생하였습니다.
-
-===== 저장 완료 =====
-JSON 파일: results/2026-03-15_travel_data.json
-Markdown 파일: results/2026-03-15_travel_plan.md
+[3/3] 최종 여행 리포트
+  - Gemini에게 여행 데이터 전달 중...
+  - Markdown 생성 중...
+  - ✅ 최종 리포트 생성 완료
+  - JSON 저장 완료
+  - Markdown 저장 완료
 
 ========================================
 🎉 AI 여행 플래너 실행 완료!
 ========================================
-(.venv) PS C:\Users\swedu18\Desktop\travel_planner> 
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
----
 ---
 
+## 10. 에러 처리
 
+프로그램은 다음과 같은 오류 상황을 처리합니다.
 
+| 오류 상황 | 처리 방법 |
+|---|---|
+| 잘못된 날짜 형식 | 오류 메시지 출력 후 종료 |
+| Gemini API 키 없음 | 오류 메시지 출력 후 종료 |
+| Gemini 클라이언트 생성 오류 | 오류 기록 후 종료 |
+| Gemini 요청 또는 JSON 파싱 실패 | 1회 재요청 |
+| JSON 재요청도 실패 | 오류 기록 후 종료 |
+| Kakao API 키 없음 | 맛집 없이 다음 단계 진행 |
+| Kakao 네트워크/API 요청 오류 | 오류 기록 후 다음 단계 진행 |
+| Kakao 응답 JSON 처리 오류 | 오류 기록 후 다음 단계 진행 |
+| Kakao 검색 결과 0건 | 빈 데이터로 다음 단계 진행 |
+| 최종 리포트 생성 오류 | 지금까지의 여행 데이터를 JSON으로 저장 |
 
+오류 정보는 JSON 파일의 `errors` 항목에 저장됩니다.
 
+예:
 
+```json
+{
+    "errors": [
+        {
+            "step": "kakao_restaurant_search",
+            "type": "REQUEST_ERROR",
+            "message": "오류 내용"
+        }
+    ]
+}
+```
 
+---
 
+## 11. 테스트 방법
+
+미션에서 제시한 테스트 기준에 따라 다음 항목을 확인합니다.
+
+### 테스트 1 — 정상 실행
+
+```powershell
+python travel_planner.py --date 2026-03-15
+```
+
+확인 사항:
+
+- Gemini 추천 성공
+- JSON 검증 성공
+- Kakao 맛집 검색
+- 최종 Markdown 리포트 생성
+- JSON 저장
+- Markdown 저장
+
+---
+
+### 테스트 2 — 잘못된 날짜
+
+```powershell
+python travel_planner.py --date abc
+```
+
+다음과 같은 메시지가 나와야 합니다.
+
+```text
+❌ 잘못된 날짜 형식입니다.
+예시: 2026-03-15
+```
+
+---
+
+### 테스트 3 — Gemini API 키 없음
+
+`.env`의 Gemini 키를 임시로 비웁니다.
+
+```text
+GEMINI_API_KEY=
+```
+
+다시 실행합니다.
+
+```powershell
+python travel_planner.py --date 2026-03-15
+```
+
+API 키 오류가 표시되고 오류 데이터가 JSON으로 저장되는지 확인합니다.
+
+테스트가 끝나면 반드시 실제 API 키를 다시 복구합니다.
+
+---
+
+### 테스트 4 — Kakao API 오류
+
+Kakao API 키를 임시로 잘못 입력합니다.
+
+```text
+KAKAO_REST_API_KEY=wrong_key
+```
+
+실행 후 다음 단계인 최종 리포트 생성까지 진행되는지 확인합니다.
+
+```text
+[2/3] Kakao 맛집 검색
+  - ⚠️ Kakao API 또는 검색 처리 중 문제가 발생했습니다.
+  - 맛집 데이터 없이 계속 진행합니다.
+
+[3/3] 최종 여행 리포트
+```
+
+테스트가 끝나면 Kakao API 키를 원래 값으로 복구합니다.
+
+---
+
+### 테스트 5 — 검색 결과 0건
+
+Kakao 검색 결과가 없는 상황에서 프로그램이 종료되지 않고 최종 리포트 단계까지 진행되는지 확인합니다.
+
+```text
+검색된 맛집이 없습니다.
+맛집 데이터 없이 계속 진행합니다.
+```
+
+---
+
+## 12. 결과 데이터 구조
+
+정상 실행 시 JSON 결과는 다음과 같은 구조입니다.
+
+```json
+{
+    "date": "2026-03-15",
+    "recommendation": {
+        "recommended_city": "추천 지역",
+        "weather": "예상 날씨",
+        "events": [
+            "행사 또는 축제"
+        ],
+        "reason": "추천 이유"
+    },
+    "places": [
+        {
+            "name": "맛집 이름",
+            "address": "주소",
+            "category": "분류",
+            "url": "URL",
+            "x": "좌표",
+            "y": "좌표"
+        }
+    ],
+    "errors": []
+}
+```
+
+오류가 발생한 경우 `errors` 배열에 단계, 오류 유형, 메시지가 저장됩니다.
+
+---
+
+## 13. 보안 주의사항
+
+API 키는 Python 코드에 직접 작성하지 않습니다.
+
+`.env` 파일에 저장하고 `python-dotenv`를 이용해 환경변수로 불러옵니다.
+
+다음 파일은 GitHub에 공개하지 않도록 합니다.
+
+```text
+.env
+.venv/
+```
+
+GitHub에 올리기 전에 반드시 다음 명령으로 상태를 확인합니다.
+
+```powershell
+git status
+```
+
+`.env`가 Git에 추적되고 있다면 업로드를 중단하고 `.gitignore` 설정을 확인합니다.
+
+---
+
+## 14. GitHub 업로드
+
+Git 상태를 먼저 확인합니다.
+
+```powershell
+git status
+```
+
+변경 사항을 추가합니다.
+
+```powershell
+git add .
+```
+
+다시 상태를 확인합니다.
+
+```powershell
+git status
+```
+
+커밋합니다.
+
+```powershell
+git commit -m "Complete AI travel planner"
+```
+
+GitHub의 `main` 브랜치로 업로드합니다.
+
+```powershell
+git push origin main
+```
+
+업로드 전에 `.env`가 포함되지 않았는지 반드시 확인합니다.
+
+---
+
+## 15. 프로젝트 폴더 구조
+
+최종적으로 다음과 같은 구조를 권장합니다.
+
+```text
+travel_planner/
+│
+├── travel_planner.py
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── .env
+│
+└── results/
+    ├── 2026-03-15_travel_data.json
+    └── 2026-03-15_travel_plan.md
+```
+
+`.env`는 로컬 환경에서만 사용하고 GitHub에는 업로드하지 않습니다.
+
+---
+
+## 16. 프로젝트 전체 실행 흐름
+
+```text
+① 여행 날짜 입력
+        ↓
+② 날짜 형식 검사
+        ↓
+③ Gemini 1차 여행지 추천
+        ↓
+④ JSON 구조화 및 Pydantic 검증
+        ↓
+⑤ JSON 파싱 실패 → 1회 재요청
+        ↓
+⑥ recommended_city 추출
+        ↓
+⑦ Kakao 맛집 검색
+        ↓
+⑧ Kakao 오류 또는 검색 결과 0건
+   → 맛집 데이터 없이 계속 진행
+        ↓
+⑨ 추천 정보 + 맛집 정보 통합
+        ↓
+⑩ Gemini 최종 여행 리포트 생성
+        ↓
+⑪ 여행 데이터 JSON 저장
+        ↓
+⑫ Markdown 리포트 저장
+        ↓
+⑬ 테스트
+        ↓
+⑭ README 작성
+        ↓
+⑮ GitHub 업로드
+```
+
+---
+
+## 17. 학습한 내용
+
+이 프로젝트를 통해 다음 과정을 학습할 수 있습니다.
+
+- Python CLI 프로그램 작성
+- `argparse`를 이용한 명령줄 인자 처리
+- 날짜 형식 검증
+- Gemini API 호출
+- Pydantic을 이용한 구조화된 JSON 검증
+- JSON 파싱 실패 시 재요청
+- Kakao Local API 호출
+- 여러 API의 결과 통합
+- API 오류 및 네트워크 오류 처리
+- 진행 로그 작성
+- JSON 데이터 저장
+- Markdown 리포트 저장
+- `.env`를 이용한 API 키 관리
+- `.gitignore`를 이용한 민감 정보 보호
+- Git과 GitHub를 이용한 프로젝트 관리
+
+---
+
+## 18. 주의사항
+
+이 프로젝트의 Gemini 모델명과 API 호출 방식은 현재 프로젝트에서 사용하도록 작성된 코드를 기준으로 합니다.
+
+실행 환경의 `google-genai` 버전이나 사용 가능한 Gemini 모델 설정에 따라 API 호출 오류가 발생할 수 있습니다. 그런 경우 설치된 라이브러리 버전과 API 콘솔의 사용 가능한 모델 설정을 확인해야 합니다.
+
+또한 날씨와 행사 정보는 Gemini가 생성한 추천 정보이므로 실제 여행 전에 공식 관광·행사 정보와 날씨 정보를 별도로 확인하는 것이 좋습니다.

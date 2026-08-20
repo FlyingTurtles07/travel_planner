@@ -23,16 +23,43 @@ class TravelRecommendation(BaseModel):
 
 
 # ----------------------------------------
+# 진행 로그
+# ----------------------------------------
+
+def log_step(step, message):
+    """프로그램 진행 상황을 출력한다."""
+    print(f"[{step}/3] {message}")
+
+
+def log_info(message):
+    """일반 진행 정보를 출력한다."""
+    print(f"  - {message}")
+
+
+def log_success(message):
+    """성공 메시지를 출력한다."""
+    print(f"  - ✅ {message}")
+
+
+def log_warning(message):
+    """경고 메시지를 출력한다."""
+    print(f"  - ⚠️ {message}")
+
+
+def log_error(message):
+    """오류 메시지를 출력한다."""
+    print(f"  - ❌ {message}")
+
+
+# ----------------------------------------
 # 날짜 형식 검사
 # ----------------------------------------
 
 def validate_date(date_string):
-    """날짜 형식이 YYYY-MM-DD인지 확인"""
-
+    """날짜 형식이 YYYY-MM-DD인지 확인한다."""
     try:
         datetime.strptime(date_string, "%Y-%m-%d")
         return True
-
     except ValueError:
         return False
 
@@ -67,6 +94,9 @@ def request_gemini(client, date):
         ),
     )
 
+    if not response.text:
+        raise ValueError("Gemini가 빈 응답을 반환했습니다.")
+
     return response.text
 
 
@@ -86,93 +116,65 @@ def get_travel_recommendation(date):
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-
-        print("❌ GEMINI_API_KEY가 설정되지 않았습니다.")
-        print(".env 파일을 확인하세요.")
+        log_error("GEMINI_API_KEY가 설정되지 않았습니다.")
+        log_info(".env 파일을 확인하세요.")
 
         return None, {
             "step": "llm_recommendation",
             "type": "MISSING_API_KEY",
-            "message": "GEMINI_API_KEY가 설정되지 않았습니다."
+            "message": "GEMINI_API_KEY가 설정되지 않았습니다.",
         }
 
     try:
-
-        client = genai.Client(
-            api_key=api_key
-        )
-
+        client = genai.Client(api_key=api_key)
     except Exception as e:
-
-        print("❌ Gemini 클라이언트 생성에 실패했습니다.")
-        print(f"오류 내용: {e}")
+        log_error("Gemini 클라이언트 생성에 실패했습니다.")
+        log_info(f"오류 내용: {e}")
 
         return None, {
             "step": "llm_recommendation",
             "type": "CLIENT_ERROR",
-            "message": str(e)
+            "message": str(e),
         }
 
-    # ----------------------------------------
     # 최대 2회 요청
-    # ----------------------------------------
-
     for attempt in range(2):
-
         try:
-
             if attempt == 0:
-                print("[Gemini] 1차 JSON 요청 중...")
-
+                log_info("1차 JSON 요청 중...")
             else:
-                print(
-                    "[Gemini] JSON 파싱 실패 "
-                    "→ 1회 재요청 중..."
-                )
+                log_warning("JSON 파싱 실패 → 1회 재요청 중...")
 
-            response_text = request_gemini(
-                client,
-                date
+            response_text = request_gemini(client, date)
+
+            log_info("JSON 응답 검증 중...")
+
+            recommendation = TravelRecommendation.model_validate_json(
+                response_text
             )
 
-            recommendation = (
-                TravelRecommendation.model_validate_json(
-                    response_text
-                )
-            )
-
-            print("✅ JSON 파싱 성공")
+            log_success("JSON 파싱 및 검증 성공")
 
             return recommendation, None
 
         except Exception as e:
-
             if attempt == 0:
-
-                print(
-                    "⚠️ JSON 파싱 또는 Gemini 요청에 실패했습니다."
-                )
-
-                print(
-                    "   1회 재요청합니다."
-                )
-
+                log_warning("JSON 파싱 또는 Gemini 요청에 실패했습니다.")
+                log_info("1회 재요청합니다.")
                 continue
 
-            print(
-                "❌ JSON 파싱 재시도도 실패했습니다."
-            )
+            log_error("JSON 파싱 재시도도 실패했습니다.")
 
             return None, {
                 "step": "llm_recommendation",
                 "type": "JSON_PARSE_ERROR",
-                "message": str(e)
+                "message": str(e),
             }
 
     return None, {
         "step": "llm_recommendation",
         "type": "UNKNOWN_ERROR",
-        "message": "알 수 없는 오류가 발생했습니다."
+        "message": "알 수 없는 오류가 발생했습니다.",
     }
 
 
@@ -185,34 +187,19 @@ def search_restaurants(city):
 
     load_dotenv()
 
-    kakao_api_key = os.getenv(
-        "KAKAO_REST_API_KEY"
-    )
+    kakao_api_key = os.getenv("KAKAO_REST_API_KEY")
 
     if not kakao_api_key:
-
-        print(
-            "❌ KAKAO_REST_API_KEY가 설정되지 않았습니다."
-        )
-
-        print(
-            ".env 파일을 확인하세요."
-        )
-
-        print(
-            "  - 맛집 검색 없이 다음 단계로 진행합니다."
-        )
+        log_warning("KAKAO_REST_API_KEY가 설정되지 않았습니다.")
+        log_info("맛집 검색 없이 다음 단계로 진행합니다.")
 
         return [], {
             "step": "kakao_restaurant_search",
             "type": "MISSING_API_KEY",
-            "message": "KAKAO_REST_API_KEY가 설정되지 않았습니다."
+            "message": "KAKAO_REST_API_KEY가 설정되지 않았습니다.",
         }
 
-    url = (
-        "https://dapi.kakao.com/"
-        "v2/local/search/keyword.json"
-    )
+    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
 
     headers = {
         "Authorization": f"KakaoAK {kakao_api_key}"
@@ -220,179 +207,112 @@ def search_restaurants(city):
 
     params = {
         "query": f"{city} 맛집",
-        "size": 5
+        "size": 5,
     }
 
     try:
-
-        print()
-        print(
-            "[2/3] 맛집 검색 중(Kakao Local)..."
-        )
-
         response = requests.get(
             url,
             headers=headers,
             params=params,
-            timeout=10
+            timeout=10,
         )
 
         response.raise_for_status()
 
         data = response.json()
-
-        documents = data.get(
-            "documents",
-            []
-        )
+        documents = data.get("documents", [])
 
         if not documents:
-
-            print(
-                "  - 검색 결과 0건"
-            )
-
-            print(
-                "  - 다음 단계로 진행합니다."
-            )
+            log_warning("검색 결과 0건")
+            log_info("맛집 데이터 없이 다음 단계로 진행합니다.")
 
             return [], None
 
         restaurants = []
 
         for item in documents:
-
             restaurant = {
-                "name": item.get(
-                    "place_name",
-                    ""
-                ),
-
+                "name": item.get("place_name", ""),
                 "address": (
                     item.get("road_address_name")
                     or item.get("address_name", "")
                 ),
-
-                "category": item.get(
-                    "category_name",
-                    ""
-                ),
-
-                "url": item.get(
-                    "place_url",
-                    ""
-                ),
-
-                "x": item.get(
-                    "x",
-                    ""
-                ),
-
-                "y": item.get(
-                    "y",
-                    ""
-                )
+                "category": item.get("category_name", ""),
+                "url": item.get("place_url", ""),
+                "x": item.get("x", ""),
+                "y": item.get("y", ""),
             }
 
-            restaurants.append(
-                restaurant
-            )
-
-        print(
-            f"  - 맛집 {len(restaurants)}곳 검색 완료"
-        )
+            restaurants.append(restaurant)
 
         return restaurants, None
 
     except requests.RequestException as e:
-
-        print(
-            "  - Kakao API 요청 중 오류가 발생했습니다."
-        )
-
-        print(
-            f"  - 오류 내용: {e}"
-        )
-
-        print(
-            "  - 맛집 데이터 없이 다음 단계로 진행합니다."
-        )
+        log_error("Kakao API 요청 중 오류가 발생했습니다.")
+        log_info(f"오류 내용: {e}")
+        log_info("맛집 데이터 없이 다음 단계로 진행합니다.")
 
         return [], {
             "step": "kakao_restaurant_search",
             "type": "REQUEST_ERROR",
-            "message": str(e)
+            "message": str(e),
+        }
+
+    except ValueError as e:
+        log_error("Kakao API 응답 JSON 처리 중 오류가 발생했습니다.")
+        log_info(f"오류 내용: {e}")
+
+        return [], {
+            "step": "kakao_restaurant_search",
+            "type": "JSON_RESPONSE_ERROR",
+            "message": str(e),
         }
 
     except Exception as e:
-
-        print(
-            "  - 맛집 검색 처리 중 오류가 발생했습니다."
-        )
-
-        print(
-            f"  - 오류 내용: {e}"
-        )
-
-        print(
-            "  - 다음 단계로 진행합니다."
-        )
+        log_error("맛집 검색 처리 중 오류가 발생했습니다.")
+        log_info(f"오류 내용: {e}")
+        log_info("다음 단계로 진행합니다.")
 
         return [], {
             "step": "kakao_restaurant_search",
             "type": "PROCESSING_ERROR",
-            "message": str(e)
+            "message": str(e),
         }
 
 
-# ==================================================
-# STEP 13
+# ----------------------------------------
 # 최종 여행 리포트 생성
-# ==================================================
+# ----------------------------------------
 
 def generate_final_report(
     date,
     recommendation,
     restaurants,
-    errors
+    errors,
 ):
     """
-    Gemini에게 1차 추천 결과와
-    Kakao 맛집 결과를 전달하여
+    Gemini에게 1차 추천 결과와 Kakao 맛집 결과를 전달하여
     최종 Markdown 여행 리포트를 생성한다.
     """
 
     load_dotenv()
 
-    api_key = os.getenv(
-        "GEMINI_API_KEY"
-    )
+    api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-
-        print(
-            "❌ GEMINI_API_KEY가 설정되지 않았습니다."
-        )
+        log_error("GEMINI_API_KEY가 설정되지 않았습니다.")
 
         return None, {
             "step": "final_report",
             "type": "MISSING_API_KEY",
-            "message": "GEMINI_API_KEY가 설정되지 않았습니다."
+            "message": "GEMINI_API_KEY가 설정되지 않았습니다.",
         }
 
     try:
+        client = genai.Client(api_key=api_key)
 
-        client = genai.Client(
-            api_key=api_key
-        )
-
-        # ----------------------------------------
-        # Gemini에게 전달할 데이터 만들기
-        # ----------------------------------------
-
-        recommendation_data = (
-            recommendation.model_dump()
-        )
+        recommendation_data = recommendation.model_dump()
 
         prompt = f"""
 다음 데이터를 바탕으로 국내 여행 최종 리포트를 작성해주세요.
@@ -465,130 +385,80 @@ API 오류나 검색 결과가 없는 경우
 - 확인되지 않은 사실을 임의로 만들어내지 마세요.
 """
 
-        print()
-        print(
-            "[3/3] 최종 리포트 생성 중(Gemini)..."
-        )
-
         response = client.models.generate_content(
             model="gemini-3.6-flash",
-            contents=prompt
+            contents=prompt,
         )
 
         report = response.text
 
         if not report:
-
-            raise ValueError(
-                "Gemini가 빈 리포트를 반환했습니다."
-            )
-
-        print(
-            "  - 최종 리포트 생성 완료"
-        )
+            raise ValueError("Gemini가 빈 리포트를 반환했습니다.")
 
         return report, None
 
     except Exception as e:
-
-        print(
-            "❌ 최종 리포트 생성 중 오류가 발생했습니다."
-        )
-
-        print(
-            f"오류 내용: {e}"
-        )
+        log_error("최종 리포트 생성 중 오류가 발생했습니다.")
+        log_info(f"오류 내용: {e}")
 
         return None, {
             "step": "final_report",
             "type": "REPORT_GENERATION_ERROR",
-            "message": str(e)
+            "message": str(e),
         }
 
 
-# ==================================================
-# STEP 15
+# ----------------------------------------
 # 여행 데이터 JSON 저장
-# ==================================================
+# ----------------------------------------
 
 def save_travel_data(
     date,
     recommendation,
     restaurants,
-    errors=None
+    errors=None,
 ):
     """전체 여행 데이터를 JSON으로 저장한다."""
 
-    os.makedirs(
-        "results",
-        exist_ok=True
-    )
+    os.makedirs("results", exist_ok=True)
 
-    filename = (
-        f"results/"
-        f"{date}_travel_data.json"
-    )
+    filename = f"results/{date}_travel_data.json"
 
     data = {
         "date": date,
-
         "recommendation": (
             recommendation.model_dump()
             if recommendation
             else None
         ),
-
         "places": restaurants,
-
-        "errors": errors or []
+        "errors": errors or [],
     }
 
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
+    with open(filename, "w", encoding="utf-8") as file:
         json.dump(
             data,
             file,
             ensure_ascii=False,
-            indent=4
+            indent=4,
         )
 
     return filename
 
 
-# ==================================================
-# STEP 15
+# ----------------------------------------
 # Markdown 여행 리포트 저장
-# ==================================================
+# ----------------------------------------
 
-def save_markdown_report(
-    date,
-    report
-):
+def save_markdown_report(date, report):
     """최종 여행 리포트를 Markdown 파일로 저장한다."""
 
-    os.makedirs(
-        "results",
-        exist_ok=True
-    )
+    os.makedirs("results", exist_ok=True)
 
-    filename = (
-        f"results/"
-        f"{date}_travel_plan.md"
-    )
+    filename = f"results/{date}_travel_plan.md"
 
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        file.write(
-            report
-        )
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write(report)
 
     return filename
 
@@ -597,57 +467,36 @@ def save_markdown_report(
 # 오류 데이터 저장
 # ----------------------------------------
 
-def save_error_data(
-    date,
-    error
-):
+def save_error_data(date, error):
     """치명적인 오류를 JSON으로 저장한다."""
 
-    os.makedirs(
-        "results",
-        exist_ok=True
-    )
+    os.makedirs("results", exist_ok=True)
 
-    filename = (
-        f"results/"
-        f"{date}_travel_data.json"
-    )
+    filename = f"results/{date}_travel_data.json"
 
     data = {
         "date": date,
         "recommendation": None,
         "places": [],
-        "errors": [
-            error
-        ]
+        "errors": [error] if error else [],
     }
 
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
+    with open(filename, "w", encoding="utf-8") as file:
         json.dump(
             data,
             file,
             ensure_ascii=False,
-            indent=4
+            indent=4,
         )
 
     return filename
 
 
-# ==================================================
+# ----------------------------------------
 # 메인 프로그램
-# ==================================================
+# ----------------------------------------
 
 def main():
-
-    # ----------------------------------------
-    # CLI 설정
-    # ----------------------------------------
-
     parser = argparse.ArgumentParser(
         description="AI 여행 플래너"
     )
@@ -655,296 +504,195 @@ def main():
     parser.add_argument(
         "--date",
         required=True,
-        help=(
-            "여행 날짜를 "
-            "YYYY-MM-DD 형식으로 입력하세요."
-        )
+        help="여행 날짜를 YYYY-MM-DD 형식으로 입력하세요.",
     )
 
     args = parser.parse_args()
 
-    # ----------------------------------------
     # 날짜 검사
-    # ----------------------------------------
-
-    if not validate_date(
-        args.date
-    ):
-
-        print(
-            "❌ 잘못된 날짜 형식입니다."
-        )
-
-        print(
-            "예시: 2026-03-15"
-        )
-
+    if not validate_date(args.date):
+        print("❌ 잘못된 날짜 형식입니다.")
+        print("예시: 2026-03-15")
         return
 
-    # ----------------------------------------
     # 시작 화면
-    # ----------------------------------------
-
     print("=" * 40)
     print("       AI 여행 플래너")
     print("=" * 40)
-
-    print(
-        f"여행 날짜: {args.date}"
-    )
-
-    print(
-        "✅ 날짜 형식이 올바릅니다."
-    )
-
+    print(f"여행 날짜: {args.date}")
+    print("✅ 날짜 형식이 올바릅니다.")
     print()
 
     # ==================================================
-    # STEP 1
-    # Gemini 여행지 추천
+    # STEP 1 — Gemini 여행지 추천
     # ==================================================
 
-    print(
-        "[1/3] 1차 추천 생성 중(Gemini)..."
+    log_step(1, "Gemini 여행지 추천")
+
+    log_info("API 호출 중...")
+
+    recommendation, gemini_error = get_travel_recommendation(
+        args.date
     )
 
-    recommendation, gemini_error = (
-        get_travel_recommendation(
-            args.date
-        )
-    )
-
-    # Gemini 실패
     if recommendation is None:
-
-        print()
-        print(
-            "❌ 1차 여행 추천을 "
-            "생성하지 못했습니다."
-        )
+        log_error("여행지 추천 생성 실패")
 
         filename = save_error_data(
             args.date,
-            gemini_error
+            gemini_error,
         )
 
-        print(
-            f"오류 기록 저장: {filename}"
-        )
-
+        log_info(f"오류 기록 저장: {filename}")
         return
 
-    # ----------------------------------------
-    # 1차 추천 결과 출력
-    # ----------------------------------------
+    log_success("추천 생성 완료")
+    log_info(
+        f"추천 지역: {recommendation.recommended_city}"
+    )
 
     print()
-    print(
-        "===== 1차 여행 추천 결과 ====="
-    )
+    print("===== 1차 여행 추천 결과 =====")
+    print(f"추천 지역: {recommendation.recommended_city}")
+    print(f"날씨: {recommendation.weather}")
+    print(f"추천 이유: {recommendation.reason}")
+    print("행사/축제:")
 
-    print(
-        f"추천 지역: "
-        f"{recommendation.recommended_city}"
-    )
-
-    print(
-        f"날씨: "
-        f"{recommendation.weather}"
-    )
-
-    print(
-        f"추천 이유: "
-        f"{recommendation.reason}"
-    )
-
-    print(
-        "행사/축제:"
-    )
-
-    for event in recommendation.events:
-
-        print(
-            f"  - {event}"
-        )
+    if recommendation.events:
+        for event in recommendation.events:
+            print(f"  - {event}")
+    else:
+        print("  - 제공된 행사/축제 정보가 없습니다.")
 
     # ==================================================
-    # STEP 2
-    # Kakao 맛집 검색
+    # STEP 2 — Kakao 맛집 검색
     # ==================================================
-
-    city = recommendation.recommended_city
-
-    restaurants, kakao_error = (
-        search_restaurants(
-            city
-        )
-    )
-
-    # ----------------------------------------
-    # Kakao 결과 출력
-    # ----------------------------------------
 
     print()
-    print(
-        "===== 맛집 검색 결과 ====="
+
+    log_step(2, "Kakao 맛집 검색")
+    log_info(
+        f"검색 지역: {recommendation.recommended_city}"
     )
+    log_info("API 호출 중...")
+
+    restaurants, kakao_error = search_restaurants(
+        recommendation.recommended_city
+    )
+
+    if kakao_error:
+        log_warning("Kakao API 또는 검색 처리 중 문제가 발생했습니다.")
+        log_info("맛집 데이터 없이 계속 진행합니다.")
+    elif restaurants:
+        log_success(
+            f"맛집 {len(restaurants)}곳 검색 완료"
+        )
+    else:
+        log_warning("검색된 맛집이 없습니다.")
+        log_info("맛집 데이터 없이 계속 진행합니다.")
+
+    print()
+    print("===== 맛집 검색 결과 =====")
 
     if not restaurants:
-
-        print(
-            "검색된 맛집이 없습니다."
-        )
-
-        print(
-            "맛집 데이터 없이 "
-            "다음 단계로 진행합니다."
-        )
-
+        print("검색된 맛집이 없습니다.")
     else:
-
         for index, restaurant in enumerate(
             restaurants,
-            start=1
+            start=1,
         ):
-
-            print(
-                f"{index}. "
-                f"{restaurant['name']}"
-            )
-
-            print(
-                f"   주소: "
-                f"{restaurant['address']}"
-            )
-
-            print(
-                f"   분류: "
-                f"{restaurant['category']}"
-            )
-
-            print(
-                f"   URL: "
-                f"{restaurant['url']}"
-            )
-
+            print(f"{index}. {restaurant['name']}")
+            print(f"   주소: {restaurant['address']}")
+            print(f"   분류: {restaurant['category']}")
+            print(f"   URL: {restaurant['url']}")
             print()
 
-    # ----------------------------------------
     # 오류 목록
-    # ----------------------------------------
-
     errors = []
 
     if kakao_error:
-        errors.append(
-            kakao_error
-        )
+        errors.append(kakao_error)
 
     # ==================================================
-    # STEP 14
-    # 최종 여행 리포트 생성
+    # STEP 3 — 최종 여행 리포트
     # ==================================================
 
-    report, report_error = (
-        generate_final_report(
-            date=args.date,
-            recommendation=recommendation,
-            restaurants=restaurants,
-            errors=errors
-        )
+    print()
+
+    log_step(3, "최종 여행 리포트")
+    log_info("Gemini에게 여행 데이터 전달 중...")
+    log_info("Markdown 생성 중...")
+
+    report, report_error = generate_final_report(
+        date=args.date,
+        recommendation=recommendation,
+        restaurants=restaurants,
+        errors=errors,
     )
 
-    # ----------------------------------------
     # 최종 리포트 생성 실패
-    # ----------------------------------------
-
     if report is None:
+        log_error("최종 리포트 생성 실패")
 
         if report_error:
-            errors.append(
-                report_error
-            )
+            errors.append(report_error)
 
-        print()
-        print(
-            "⚠️ 최종 리포트 생성에 실패했습니다."
-        )
-
-        # 그래도 지금까지의 데이터를 JSON으로 저장
         json_filename = save_travel_data(
             date=args.date,
             recommendation=recommendation,
             restaurants=restaurants,
-            errors=errors
+            errors=errors,
         )
 
-        print(
-            f"여행 데이터 JSON: "
-            f"{json_filename}"
+        log_info(
+            f"지금까지의 여행 데이터 저장 완료: {json_filename}"
         )
-
         return
 
+    log_success("최종 리포트 생성 완료")
+
     # ==================================================
-    # STEP 15
     # JSON 저장
     # ==================================================
+
+    log_info("JSON 파일 저장 중...")
 
     json_filename = save_travel_data(
         date=args.date,
         recommendation=recommendation,
         restaurants=restaurants,
-        errors=errors
+        errors=errors,
     )
 
+    log_success(f"JSON 저장 완료: {json_filename}")
+
     # ==================================================
-    # STEP 15
     # Markdown 저장
     # ==================================================
 
+    log_info("Markdown 파일 저장 중...")
+
     markdown_filename = save_markdown_report(
         date=args.date,
-        report=report
+        report=report,
     )
 
-    # ----------------------------------------
+    log_success(
+        f"Markdown 저장 완료: {markdown_filename}"
+    )
+
     # 최종 결과 출력
-    # ----------------------------------------
-
     print()
-    print(
-        "===== 최종 여행 리포트 ====="
-    )
-
-    print(
-        report
-    )
-
-    print()
-    print(
-        "===== 저장 완료 ====="
-    )
-
-    print(
-        f"JSON 파일: {json_filename}"
-    )
-
-    print(
-        f"Markdown 파일: {markdown_filename}"
-    )
+    print("===== 최종 여행 리포트 =====")
+    print(report)
 
     print()
     print("=" * 40)
-    print(
-        "🎉 AI 여행 플래너 실행 완료!"
-    )
+    print("🎉 AI 여행 플래너 실행 완료!")
     print("=" * 40)
+    print(f"JSON    : {json_filename}")
+    print(f"Markdown: {markdown_filename}")
 
-
-# ----------------------------------------
-# 프로그램 실행
-# ----------------------------------------
 
 if __name__ == "__main__":
     main()
